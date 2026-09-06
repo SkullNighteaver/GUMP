@@ -1,0 +1,3477 @@
+using System;
+using System.Collections.Generic;
+using System.Drawing;
+using System.IO;
+using System.Reflection;
+using System.Windows.Forms;
+using GumpEditor.ClientData;
+using GumpEditor.Models;
+using GumpEditor.Parsing;
+using GumpEditor.Rendering;
+using GumpEditor.Forms;
+
+namespace GumpEditor
+{
+    public sealed class MainForm : Form
+    {
+        private readonly GumpDocumentLoader _documentLoader;
+        private readonly GumpCanvas _canvas;
+private GumpArtReader _gumpArtReader;
+        private HueReader _hueReader;
+private UoFontReader _uoFontReader;
+
+private GroupBox _textEditorGroup;
+private RichTextBox _textEditor;
+private ComboBox _textFontCombo;
+private ComboBox _textSizeCombo;
+private ComboBox _textAlignCombo;
+
+private Button _textBoldButton;
+private Button _textItalicButton;
+private Button _textUnderlineButton;
+private Button _textApplyButton;
+
+private PictureBox _textFontPreview;
+private Label _textFontInfo;
+
+        // ====================================================
+        // EDITOR VISUAL DE TEXTO DO GUMP
+        // ====================================================
+
+        private Panel _gumpTextEditorPanel;
+        private Label _gumpTextEditorTitle;
+        private RichTextBox _gumpTextEditor;
+        private ComboBox _gumpFontCombo;
+        private ComboBox _gumpSizeCombo;
+        private ComboBox _gumpAlignCombo;
+        private NumericUpDown _gumpHueNumeric;
+
+        private Button _gumpBoldButton;
+        private Button _gumpItalicButton;
+        private Button _gumpUnderlineButton;
+        private Button _gumpApplyTextButton;
+        private Button _gumpColorButton;
+        private Color _gumpTextColor = Color.White;
+
+        private Label _gumpFontInfo;
+        private MenuStrip _menuStrip;
+        private ToolStrip _toolStrip;
+        private StatusStrip _statusStrip;
+
+        // ====================================================
+        // FONTES DO ULTIMA ONLINE
+        // ====================================================
+
+        private ToolStripMenuItem _uoFontsMenu;
+
+        private readonly List<ToolStripMenuItem> _uoFontItems =
+            new List<ToolStripMenuItem>();
+
+        private int _selectedUoFont = 0;
+
+        private ToolStripButton _openButton;
+        private ToolStripButton _saveButton;
+        private ToolStripButton _saveAsButton;
+        private ToolStripButton _addButton;
+        private ToolStripButton _deleteButton;
+        private ToolStripButton _gridButton;
+        private ToolStripComboBox _zoomCombo;
+private Button _textCenterButton;
+private Button _textLeftButton;
+private Button _textRightButton;
+private Button _textJustifyButton;
+
+private Label _textEditorTitle;
+
+        private Panel _leftPanel;
+        private Panel _propertiesPanel;
+
+        private ListBox _elementsList;
+        private ComboBox _pageCombo;
+
+        private NumericUpDown _x;
+        private NumericUpDown _y;
+        private NumericUpDown _width;
+        private NumericUpDown _height;
+        private NumericUpDown _art;
+        private NumericUpDown _button;
+        private NumericUpDown _hue;
+
+        private TextBox _text;
+
+        private Button _applyButton;
+
+        private NumericUpDown _artBrowserId;
+        private NumericUpDown _artBrowserHue;
+        private PictureBox _artPreview;
+        private Button _previewArtButton;
+        private Button _addArtButton;
+
+        private ListBox _hueList;
+        private Panel _huePreview;
+        private Button _useHueButton;
+
+        private Label _selectedLabel;
+        private bool _updatingElementsList;
+        private bool _updatingPage;
+        // ========================================================
+        // CONTROLE DE ALTERAÇÃO DO DOCUMENTO
+        // ========================================================
+
+        private bool _isDirty = false;
+
+        private string _currentFilePath = null;
+
+
+        
+        // ========================================================
+        // GumpEditorResolutionSelector
+        // Seleção da resolução usada pelo canvas.
+        // ========================================================
+
+        private System.Windows.Forms.ComboBox GumpEditorResolutionSelector;
+
+        private readonly (int Width, int Height, string Name)[] GumpEditorResolutions =
+        {
+            (800, 600, "800 x 600"),
+            (1024, 768, "1024 x 768"),
+            (1152, 864, "1152 x 864"),
+            (1280, 720, "1280 x 720"),
+            (1280, 800, "1280 x 800"),
+            (1280, 1024, "1280 x 1024"),
+            (1366, 768, "1366 x 768"),
+            (1440, 900, "1440 x 900"),
+            (1600, 900, "1600 x 900"),
+            (1680, 1050, "1680 x 1050"),
+            (1920, 1080, "1920 x 1080"),
+            (1920, 1200, "1920 x 1200"),
+            (2560, 1440, "2560 x 1440"),
+            (2560, 1600, "2560 x 1600"),
+            (3840, 2160, "3840 x 2160")
+        };
+
+        private void GumpEditorCreateResolutionSelector()
+        {
+            if (GumpEditorResolutionSelector != null)
+                return;
+
+            GumpEditorResolutionSelector = new System.Windows.Forms.ComboBox();
+
+            GumpEditorResolutionSelector.Name = "GumpEditorResolutionSelector";
+            GumpEditorResolutionSelector.DropDownStyle =
+                System.Windows.Forms.ComboBoxStyle.DropDownList;
+
+            GumpEditorResolutionSelector.Width = 140;
+            GumpEditorResolutionSelector.Items.Clear();
+
+            foreach (var resolution in GumpEditorResolutions)
+                GumpEditorResolutionSelector.Items.Add(resolution.Name);
+
+            GumpEditorResolutionSelector.SelectedIndexChanged +=
+                GumpEditorResolutionSelector_SelectedIndexChanged;
+
+            GumpEditorResolutionSelector.SelectedIndex = 0;
+
+            Controls.Add(GumpEditorResolutionSelector);
+
+            GumpEditorResolutionSelector.BringToFront();
+        }
+
+        private void GumpEditorResolutionSelector_SelectedIndexChanged(
+            object sender,
+            System.EventArgs e)
+        {
+            if (GumpEditorResolutionSelector == null)
+                return;
+
+            int index = GumpEditorResolutionSelector.SelectedIndex;
+
+            if (index < 0 || index >= GumpEditorResolutions.Length)
+                return;
+
+            var resolution = GumpEditorResolutions[index];
+
+        // O evento pode ocorrer antes da criacao do canvas.
+        // Nesse momento nao ha nada para redimensionar.
+        if (_canvas == null)
+            return;
+
+            // O canvas precisa representar a área real da tela,
+            // não uma grade fixa de 800x600.
+            try
+            {
+                _canvas.Width = resolution.Width;
+                _canvas.Height = resolution.Height;
+            }
+            catch
+            {
+                // Alguns controles podem possuir tamanho interno próprio.
+                // Nesse caso o evento não derruba o editor.
+            }
+
+            _canvas.Invalidate();
+        }
+
+public MainForm()
+        {
+            // Seletor de resolução do editor.
+            GumpEditorCreateResolutionSelector();
+
+            _documentLoader = new GumpDocumentLoader();
+
+            Text = "UOGumpDesigner";
+            StartPosition = FormStartPosition.CenterScreen;
+
+            Width = 1500;
+            Height = 900;
+            MinimumSize = new Size(1150, 700);
+
+            InitializeMenu();
+            InitializeToolBar();
+            InitializeStatusBar();
+_uoFontReader =
+    new UoFontReader(
+        @"C:\Ultima Online Classic"
+    );
+
+            InitializeLeftPanel();
+            InitializeProperties();
+
+            _canvas = new GumpCanvas
+            {
+                Dock = DockStyle.Fill
+            };
+
+            _canvas.SelectedElementChanged += CanvasSelectedElementChanged;
+
+            // Editor visual de texto.
+            BuildVisualTextEditor();
+_canvas.SelectedElementChanged += CanvasTextEditorSelectionChanged;
+            _canvas.SelectedElementChanged += delegate
+{
+    LoadSelectedElementIntoTextEditor();
+};
+
+
+            Controls.Add(_canvas);
+            Controls.Add(_propertiesPanel);
+            Controls.Add(_leftPanel);
+            Controls.Add(_toolStrip);
+            Controls.Add(_menuStrip);
+            Controls.Add(_statusStrip);
+
+            MainMenuStrip = _menuStrip;
+
+            InitializeGumpArt();
+            InitializeHues();
+        // GUMPEDITOR_APPLY_BUTTON_SIZE
+        if (_applyButton != null)
+        {
+            _applyButton.Width = 85;
+        }
+
+        if (_gumpApplyTextButton != null)
+        {
+            _gumpApplyTextButton.Width = 85;
+        }
+
+        }
+
+        private void InitializeTextEditor()
+{
+    if (_propertiesPanel == null)
+        return;
+
+    _textEditorGroup =
+        new GroupBox
+        {
+            Text = "Editor de Texto / HTML do Ultima Online",
+            Dock = DockStyle.Bottom,
+            Height = 390,
+            Padding = new Padding(6)
+        };
+
+    var top =
+        new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            Height = 150,
+            ColumnCount = 2,
+            RowCount = 4,
+            Padding = new Padding(2)
+        };
+
+    top.ColumnStyles.Add(
+        new ColumnStyle(
+            SizeType.Absolute,
+            105));
+
+    top.ColumnStyles.Add(
+        new ColumnStyle(
+            SizeType.Percent,
+            100));
+
+    top.RowStyles.Add(
+        new RowStyle(
+            SizeType.Absolute,
+            34));
+
+    top.RowStyles.Add(
+        new RowStyle(
+            SizeType.Absolute,
+            34));
+
+    top.RowStyles.Add(
+        new RowStyle(
+            SizeType.Absolute,
+            34));
+
+    top.RowStyles.Add(
+        new RowStyle(
+            SizeType.Absolute,
+            40));
+
+    // ==============================
+    // FONTE UO
+    // ==============================
+
+    top.Controls.Add(
+        new Label
+        {
+            Text = "Fonte UO:",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft
+        },
+        0,
+        0);
+
+    _textFontCombo =
+        new ComboBox
+        {
+            Dock = DockStyle.Fill,
+            DropDownStyle =
+                ComboBoxStyle.DropDownList,
+            DrawMode =
+                DrawMode.OwnerDrawFixed,
+            ItemHeight = 30,
+            DropDownHeight = 420
+        };
+
+    if (_uoFontReader != null)
+    {
+        for (int i = 0;
+             i < _uoFontReader.Fonts.Count;
+             i++)
+        {
+            _textFontCombo.Items.Add(
+                "Font " + i
+            );
+        }
+    }
+
+    _textFontCombo.SelectedIndex = 0;
+
+    _textFontCombo.DrawItem +=
+        TextFontComboDrawItem;
+
+    _textFontCombo.SelectedIndexChanged +=
+        TextFontComboChanged;
+
+    top.Controls.Add(
+        _textFontCombo,
+        1,
+        0);
+
+    // ==============================
+    // TAMANHO
+    // ==============================
+
+    top.Controls.Add(
+        new Label
+        {
+            Text = "Tamanho:",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft
+        },
+        0,
+        1);
+
+    _textSizeCombo =
+        new ComboBox
+        {
+            Dock = DockStyle.Fill,
+            DropDownStyle =
+                ComboBoxStyle.DropDownList
+        };
+
+    _textSizeCombo.Items.AddRange(
+        new object[]
+        {
+            "Pequeno",
+            "Normal",
+            "Grande",
+            "Muito grande"
+        });
+
+    _textSizeCombo.SelectedIndex = 1;
+
+    _textSizeCombo.SelectedIndexChanged +=
+        TextFormattingChanged;
+
+    top.Controls.Add(
+        _textSizeCombo,
+        1,
+        1);
+
+    // ==============================
+    // ALINHAMENTO
+    // ==============================
+
+    top.Controls.Add(
+        new Label
+        {
+            Text = "Alinhamento:",
+            Dock = DockStyle.Fill,
+            TextAlign = ContentAlignment.MiddleLeft
+        },
+        0,
+        2);
+
+    _textAlignCombo =
+        new ComboBox
+        {
+            Dock = DockStyle.Fill,
+            DropDownStyle =
+                ComboBoxStyle.DropDownList
+        };
+
+    _textAlignCombo.Items.AddRange(
+        new object[]
+        {
+            "Esquerda",
+            "Centralizado",
+            "Direita",
+            "Justificado"
+        });
+
+    _textAlignCombo.SelectedIndex = 0;
+
+    _textAlignCombo.SelectedIndexChanged +=
+        TextFormattingChanged;
+
+    top.Controls.Add(
+        _textAlignCombo,
+        1,
+        2);
+
+    // ==============================
+    // BOTÕES
+    // ==============================
+
+    var buttons =
+        new FlowLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            FlowDirection =
+                FlowDirection.LeftToRight
+        };
+
+    _textBoldButton =
+        CreateTextButton(
+            "B",
+            "Negrito");
+
+    _textItalicButton =
+        CreateTextButton(
+            "I",
+            "Itálico");
+
+    _textUnderlineButton =
+        CreateTextButton(
+            "U",
+            "Sublinhado");
+
+    _textBoldButton.Click +=
+        delegate
+        {
+            WrapSelection("<b>", "</b>");
+        };
+
+    _textItalicButton.Click +=
+        delegate
+        {
+            WrapSelection("<i>", "</i>");
+        };
+
+    _textUnderlineButton.Click +=
+        delegate
+        {
+            WrapSelection("<u>", "</u>");
+        };
+
+    buttons.Controls.Add(
+        _textBoldButton);
+
+    buttons.Controls.Add(
+        _textItalicButton);
+
+    buttons.Controls.Add(
+        _textUnderlineButton);
+
+    top.Controls.Add(
+        buttons,
+        1,
+        3);
+
+    // ==============================
+    // PREVIEW DA FONTE
+    // ==============================
+
+    _textFontPreview =
+        new PictureBox
+        {
+            Dock = DockStyle.Top,
+            Height = 52,
+            BackColor = Color.FromArgb(
+                25,
+                25,
+                25),
+            SizeMode =
+                PictureBoxSizeMode.CenterImage
+        };
+
+    _textFontInfo =
+        new Label
+        {
+            Dock = DockStyle.Top,
+            Height = 24,
+            TextAlign =
+                ContentAlignment.MiddleCenter
+        };
+
+    // ==============================
+    // EDITOR HTML
+    // ==============================
+
+    _textEditor =
+        new RichTextBox
+        {
+            Dock = DockStyle.Fill,
+            Multiline = true,
+            AcceptsTab = true,
+            DetectUrls = false,
+            WordWrap = true,
+            ScrollBars =
+                RichTextBoxScrollBars.Both,
+            BorderStyle =
+                BorderStyle.FixedSingle,
+            Font =
+                new Font(
+                    "Consolas",
+                    10,
+                    FontStyle.Regular)
+        };
+
+    _textEditor.TextChanged +=
+        TextEditorChanged;
+
+    // ==============================
+    // APLICAR
+    // ==============================
+
+    _textApplyButton =
+        new Button
+        {
+            Text = "APLICAR TEXTO AO GUMP",
+            Dock = DockStyle.Bottom,
+            Height = 34,
+            Cursor = Cursors.Hand
+        };
+
+    _textApplyButton.Click +=
+        ApplyTextEditor;
+
+    _textEditorGroup.Controls.Add(
+        _textEditor);
+
+    _textEditorGroup.Controls.Add(
+        _textApplyButton);
+
+    _textEditorGroup.Controls.Add(
+        _textFontInfo);
+
+    _textEditorGroup.Controls.Add(
+        _textFontPreview);
+
+    _textEditorGroup.Controls.Add(
+        top);
+
+    _propertiesPanel.Controls.Add(
+        _textEditorGroup);
+
+    UpdateTextFontPreview();
+}
+
+private Button CreateTextButton(
+    string text,
+    string tooltip)
+{
+    var button =
+        new Button
+        {
+            Text = text,
+            Width = 38,
+            Height = 28,
+            FlatStyle =
+                FlatStyle.Standard
+        };
+
+    var tip =
+        new ToolTip();
+
+    tip.SetToolTip(
+        button,
+        tooltip);
+
+    return button;
+}
+
+private void TextFontComboDrawItem(
+    object sender,
+    DrawItemEventArgs e)
+{
+    if (e.Index < 0)
+        return;
+
+    e.DrawBackground();
+
+    string label =
+        "Font " + e.Index;
+
+    if (_uoFontReader != null)
+    {
+        Bitmap preview =
+            _uoFontReader.RenderText(
+                e.Index,
+                "AaBbCc 0123456789",
+                Color.White,
+                1.0f);
+
+        if (preview != null)
+        {
+            Rectangle rect =
+                new Rectangle(
+                    e.Bounds.X + 4,
+                    e.Bounds.Y + 2,
+                    Math.Min(
+                        preview.Width,
+                        190),
+                    Math.Min(
+                        preview.Height,
+                        e.Bounds.Height - 4));
+
+            e.Graphics.DrawImage(
+                preview,
+                rect);
+
+            preview.Dispose();
+        }
+    }
+
+    using (var brush =
+           new SolidBrush(
+               e.ForeColor))
+    {
+        e.Graphics.DrawString(
+            label,
+            e.Font,
+            brush,
+            e.Bounds.Right - 52,
+            e.Bounds.Y + 7);
+    }
+
+    e.DrawFocusRectangle();
+}
+
+private void TextFontComboChanged(
+    object sender,
+    EventArgs e)
+{
+    UpdateTextFontPreview();
+
+    UpdateTextEditorHtmlFont();
+
+    _canvas.RefreshCanvas();
+}
+
+private void TextFormattingChanged(
+    object sender,
+    EventArgs e)
+{
+    ApplyFormattingToHtml();
+
+    _canvas.RefreshCanvas();
+}
+
+private void TextEditorChanged(
+    object sender,
+    EventArgs e)
+{
+    UpdateTextFontPreview();
+}
+
+private void UpdateTextFontPreview()
+{
+    if (_textFontPreview == null ||
+        _uoFontReader == null ||
+        _textFontCombo == null)
+        return;
+
+    int fontId =
+        Math.Max(
+            0,
+            _textFontCombo.SelectedIndex);
+
+    Bitmap preview =
+        _uoFontReader.RenderText(
+            fontId,
+            "AaBbCc 0123456789",
+            Color.White,
+            1.0f);
+
+    Image old =
+        _textFontPreview.Image;
+
+    _textFontPreview.Image =
+        preview;
+
+    if (old != null)
+        old.Dispose();
+
+    if (_textFontInfo != null)
+    {
+        _textFontInfo.Text =
+            "Fonte UO " +
+            fontId +
+            " — fonte real de fonts.mul";
+    }
+}
+
+private void CanvasTextEditorSelectionChanged(
+    object sender,
+    EventArgs e)
+{
+    /*
+     * Sempre que o usuario seleciona ou move um elemento,
+     * sincronizamos o editor visual.
+     */
+
+    LoadSelectedElementIntoTextEditor();
+}
+private void DetectHtmlFont()
+{
+    if (_textEditor == null ||
+        _textFontCombo == null)
+        return;
+
+    string text =
+        _textEditor.Text ?? string.Empty;
+
+    var match =
+        System.Text.RegularExpressions.Regex.Match(
+            text,
+            @"(?:face|font)\s*=\s*[""']?(\d+)");
+
+    if (match.Success &&
+        int.TryParse(
+            match.Groups[1].Value,
+            out int fontId))
+    {
+        if (fontId >= 0 &&
+            fontId < _textFontCombo.Items.Count)
+        {
+            _textFontCombo.SelectedIndex =
+                fontId;
+        }
+    }
+}
+
+private void UpdateTextEditorHtmlFont()
+{
+    if (_textEditor == null ||
+        _textFontCombo == null)
+        return;
+
+    if (_canvas.SelectedElement == null)
+        return;
+
+    int fontId =
+        Math.Max(
+            0,
+            _textFontCombo.SelectedIndex);
+
+    string html =
+        _textEditor.Text ?? string.Empty;
+
+    var pattern =
+        @"<font\s+face\s*=\s*[""']?\d+[""']?\s*>";
+
+    if (System.Text.RegularExpressions.Regex.IsMatch(
+        html,
+        pattern,
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+    {
+        html =
+            System.Text.RegularExpressions.Regex.Replace(
+                html,
+                pattern,
+                "<font face=\"" +
+                fontId +
+                "\">",
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+    else
+    {
+        html =
+            "<font face=\"" +
+            fontId +
+            "\">" +
+            html +
+            "</font>";
+    }
+
+    int caret =
+        Math.Min(
+            _textEditor.SelectionStart,
+            html.Length);
+
+    _textEditor.Text =
+        html;
+
+    _textEditor.SelectionStart =
+        caret;
+}
+
+private void ApplyFormattingToHtml()
+{
+    if (_textEditor == null)
+        return;
+
+    if (_textAlignCombo == null)
+        return;
+
+    string html =
+        _textEditor.Text ?? string.Empty;
+
+    string open = string.Empty;
+    string close = string.Empty;
+
+    switch (_textAlignCombo.SelectedIndex)
+    {
+        case 1:
+            open = "<center>";
+            close = "</center>";
+            break;
+
+        case 2:
+            open = "<div align=\"right\">";
+            close = "</div>";
+            break;
+
+        case 3:
+            open = "<div align=\"justify\">";
+            close = "</div>";
+            break;
+    }
+
+    if (!string.IsNullOrEmpty(open))
+    {
+        html =
+            open +
+            html +
+            close;
+    }
+
+    _textEditor.Text = html;
+}
+
+private void WrapSelection(
+    string openTag,
+    string closeTag)
+{
+    if (_textEditor == null)
+        return;
+
+    int start =
+        _textEditor.SelectionStart;
+
+    int length =
+        _textEditor.SelectionLength;
+
+    string selected =
+        length > 0
+            ? _textEditor.SelectedText
+            : "texto";
+
+    string replacement =
+        openTag +
+        selected +
+        closeTag;
+
+    _textEditor.SelectedText =
+        replacement;
+
+    _textEditor.SelectionStart =
+        start +
+        replacement.Length;
+
+    ApplyTextEditor(null, EventArgs.Empty);
+}
+
+private void ApplyTextEditor(
+    object sender,
+    EventArgs e)
+{
+    if (_canvas.SelectedElement == null ||
+        _textEditor == null)
+        return;
+
+    GumpElement element =
+        _canvas.SelectedElement;
+
+    if (element.Type !=
+            GumpElementType.Html &&
+        element.Type !=
+            GumpElementType.Label &&
+        element.Type !=
+            GumpElementType.LabelCropped)
+    {
+        return;
+    }
+
+    string text =
+        _textEditor.Text ?? string.Empty;
+
+    element.Text = text;
+
+    if (element.Type ==
+        GumpElementType.Html)
+    {
+        SetElementParameter(
+            element,
+            4,
+            text);
+    }
+    else if (element.Type ==
+        GumpElementType.Label)
+    {
+        SetElementParameter(
+            element,
+            3,
+            text);
+    }
+    else if (element.Type ==
+        GumpElementType.LabelCropped)
+    {
+        SetElementParameter(
+            element,
+            5,
+            text);
+    }
+
+    if (_canvas.Document != null)
+        _canvas.Document.IsModified = true;
+
+    _canvas.RefreshCanvas();
+}
+
+private void SetElementParameter(
+    GumpElement element,
+    int index,
+    string value)
+{
+    while (element.Parameters.Count <= index)
+        element.Parameters.Add(string.Empty);
+
+    element.Parameters[index] =
+        value;
+}
+
+
+    private void InitializeGumpArt()
+        {
+            var path =
+                @"C:\Ultima Online Classic\gumpartLegacyMUL.uop";
+
+            if (!File.Exists(path))
+                return;
+
+            try
+            {
+                _gumpArtReader = new GumpArtReader(path);
+
+                _canvas.ArtReader = _gumpArtReader;
+    _canvas.UoFontReader = _uoFontReader;
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this,
+                    "Não foi possível carregar as artes dos Gumps.\r\n\r\n" +
+                    ex.Message,
+                    "Gump Editor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private void InitializeHues()
+        {
+            var path =
+                @"C:\Ultima Online Classic\hues.mul";
+
+            if (!File.Exists(path))
+                return;
+
+            try
+            {
+                _hueReader = new HueReader(path);
+                _canvas.HueReader = _hueReader;
+
+                PopulateHueList();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this,
+                    "Não foi possível carregar os Hues.\r\n\r\n" +
+                    ex.Message,
+                    "Gump Editor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+            }
+        }
+
+        private void MarkDocumentDirty()
+{
+    _isDirty = true;
+    UpdateWindowTitle();
+}
+
+private void MarkDocumentClean()
+{
+    _isDirty = false;
+    UpdateWindowTitle();
+}
+
+private void UpdateWindowTitle()
+{
+    string fileName =
+        string.IsNullOrWhiteSpace(_currentFilePath)
+            ? "Sem arquivo"
+            : Path.GetFileName(_currentFilePath);
+
+    Text =
+        "UOGumpDesigner - " +
+        fileName +
+        (_isDirty ? " *" : "");
+}
+
+private bool ConfirmCloseCurrentDocument()
+{
+    if (!_isDirty)
+    {
+        return true;
+    }
+
+    DialogResult result =
+        MessageBox.Show(
+            this,
+            "O Gump atual foi modificado." +
+            Environment.NewLine +
+            Environment.NewLine +
+            "Deseja salvar as alterações antes de abrir outro arquivo?",
+            "GumpEditor",
+            MessageBoxButtons.YesNoCancel,
+            MessageBoxIcon.Warning);
+
+    if (result == DialogResult.Cancel)
+    {
+        return false;
+    }
+
+    if (result == DialogResult.Yes)
+    {
+        /*
+         * Utiliza o mecanismo de salvamento já existente.
+         *
+         * Se o arquivo ainda não possuir caminho,
+         * o botão Salvar Como existente será acionado.
+         */
+        try
+        {
+            if (string.IsNullOrWhiteSpace(_currentFilePath))
+            {
+                _saveAsButton.PerformClick();
+            }
+            else
+            {
+                _saveButton.PerformClick();
+            }
+        }
+        catch
+        {
+            MessageBox.Show(
+                this,
+                "Não foi possível salvar o arquivo atual.",
+                "GumpEditor",
+                MessageBoxButtons.OK,
+                MessageBoxIcon.Error);
+
+            return false;
+        }
+
+        if (_isDirty)
+        {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+private void ResetDocumentEditorState()
+{
+    _updatingElementsList = true;
+
+    try
+    {
+        if (_elementsList != null)
+        {
+            _elementsList.Items.Clear();
+        }
+    }
+    finally
+    {
+        _updatingElementsList = false;
+    }
+
+    if (_pageCombo != null)
+    {
+        _pageCombo.Items.Clear();
+        _pageCombo.Items.Add("Página 0");
+
+        _pageCombo.SelectedIndex = 0;
+    }
+
+    if (_selectedLabel != null)
+    {
+        _selectedLabel.Text =
+            "Nenhum elemento selecionado";
+    }
+
+    if (_canvas != null)
+    {
+        try
+        {
+            _canvas.ClearSelection();
+        }
+        catch
+        {
+        }
+    }
+
+    UpdateWindowTitle();
+}
+
+private void InitializeMenu()
+{
+    _menuStrip = new MenuStrip();
+
+    // =========================
+    // ARQUIVO
+    // =========================
+
+    var file = new ToolStripMenuItem("Arquivo");
+
+    var open = new ToolStripMenuItem("Abrir C#...");
+    open.ShortcutKeys = Keys.Control | Keys.O;
+    open.Click += OpenFile;
+
+    var save = new ToolStripMenuItem("Salvar");
+    save.ShortcutKeys = Keys.Control | Keys.S;
+    save.Click += SaveFile;
+
+    var saveAs = new ToolStripMenuItem("Salvar Como...");
+    saveAs.ShortcutKeys = Keys.Control | Keys.Shift | Keys.S;
+    saveAs.Click += SaveAsFile;
+
+    var exit = new ToolStripMenuItem("Sair");
+    exit.Click += delegate
+    {
+        Close();
+    };
+
+    file.DropDownItems.Add(open);
+    file.DropDownItems.Add(save);
+    file.DropDownItems.Add(saveAs);
+    file.DropDownItems.Add(new ToolStripSeparator());
+    file.DropDownItems.Add(exit);
+
+    // =========================
+    // EDITAR
+    // =========================
+
+    var edit = new ToolStripMenuItem("Editar");
+
+    var add = new ToolStripMenuItem("Adicionar elemento");
+    add.Click += AddElement;
+
+    var delete = new ToolStripMenuItem("Excluir elemento");
+    delete.Click += DeleteElement;
+
+    edit.DropDownItems.Add(add);
+    edit.DropDownItems.Add(delete);
+
+    // =========================
+    // EXIBIR
+    // =========================
+
+    var view = new ToolStripMenuItem("Exibir");
+
+    var grid = new ToolStripMenuItem("Grid");
+    grid.Checked = true;
+    grid.Click += ToggleGrid;
+
+    view.DropDownItems.Add(grid);
+
+    // =========================
+    // FONTES DO ULTIMA ONLINE
+    // =========================
+
+    _uoFontsMenu = new ToolStripMenuItem("Fontes UO");
+
+    _uoFontItems.Clear();
+
+    for (int i = 0; i <= 9; i++)
+    {
+        int fontId = i;
+
+        var fontItem = new ToolStripMenuItem(
+            "Font " + fontId
+        );
+
+        fontItem.Tag = fontId;
+        fontItem.Checked = fontId == _selectedUoFont;
+
+        fontItem.Click += delegate
+        {
+            SelectUoFont(fontId);
+        };
+
+        _uoFontItems.Add(fontItem);
+        _uoFontsMenu.DropDownItems.Add(fontItem);
+    }
+
+    // =========================
+    // ADICIONA OS MENUS
+    // =========================
+
+    _menuStrip.Items.Clear();
+
+    view.DropDownItems.Add(_uoFontsMenu);
+
+    _menuStrip.Items.Add(file);
+    _menuStrip.Items.Add(edit);
+    _menuStrip.Items.Add(view);
+
+}
+
+    
+
+        // ====================================================
+        // SELECIONA UMA FONTE DO ULTIMA ONLINE
+        // ====================================================
+
+        private void SelectUoFont(int fontId)
+{
+    if (_uoFontReader != null)
+    {
+        if (fontId < 0 ||
+            fontId >= _uoFontReader.Fonts.Count)
+        {
+            return;
+        }
+    }
+
+    _selectedUoFont =
+        fontId;
+
+    if (_uoFontItems != null)
+    {
+        foreach (ToolStripMenuItem item
+                 in _uoFontItems)
+        {
+            if (item.Tag is int)
+            {
+                item.Checked =
+                    (int)item.Tag ==
+                    _selectedUoFont;
+            }
+        }
+    }
+
+    if (_gumpFontCombo != null &&
+        fontId >= 0 &&
+        fontId < _gumpFontCombo.Items.Count)
+    {
+        _gumpFontCombo.SelectedIndex =
+            fontId;
+    }
+
+    if (_textFontCombo != null &&
+        fontId >= 0 &&
+        fontId < _textFontCombo.Items.Count)
+    {
+        _textFontCombo.SelectedIndex =
+            fontId;
+    }
+
+    if (_canvas != null)
+        _canvas.Invalidate();
+}
+
+
+        private void InitializeToolBar()
+        {
+            _toolStrip = new ToolStrip();
+
+            _openButton = new ToolStripButton("Abrir");
+            _openButton.Click += OpenFile;
+
+            _saveButton = new ToolStripButton("Salvar");
+            _saveButton.Click += SaveFile;
+
+            _saveAsButton = new ToolStripButton("Salvar Como");
+            _saveAsButton.Click += SaveAsFile;
+
+            _addButton = new ToolStripButton("Adicionar");
+            _addButton.Click += AddElement;
+
+            _deleteButton = new ToolStripButton("Excluir");
+            _deleteButton.Click += DeleteElement;
+
+            _gridButton = new ToolStripButton("Grid")
+            {
+                CheckOnClick = true,
+                Checked = true
+            };
+
+            _gridButton.CheckedChanged += delegate
+            {
+                if (_canvas == null)
+                    return;
+
+                _canvas.ShowGrid = _gridButton.Checked;
+                _canvas.Invalidate();
+            };
+
+            _zoomCombo = new ToolStripComboBox
+            {
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Width = 80
+            };
+
+            _zoomCombo.Items.Add("25%");
+            _zoomCombo.Items.Add("50%");
+            _zoomCombo.Items.Add("75%");
+            _zoomCombo.Items.Add("100%");
+            _zoomCombo.Items.Add("125%");
+            _zoomCombo.Items.Add("150%");
+            _zoomCombo.Items.Add("200%");
+            _zoomCombo.Items.Add("250%");
+            _zoomCombo.Items.Add("300%");
+
+            _zoomCombo.SelectedIndex = 3;
+            _zoomCombo.SelectedIndexChanged += ZoomChanged;
+
+            _toolStrip.Items.Add(_openButton);
+            _toolStrip.Items.Add(_saveButton);
+            _toolStrip.Items.Add(_saveAsButton);
+
+            _toolStrip.Items.Add(new ToolStripSeparator());
+
+            _toolStrip.Items.Add(_addButton);
+            _toolStrip.Items.Add(_deleteButton);
+
+            _toolStrip.Items.Add(new ToolStripSeparator());
+
+            _toolStrip.Items.Add(_gridButton);
+
+            _toolStrip.Items.Add(new ToolStripSeparator());
+
+            _toolStrip.Items.Add(
+                new ToolStripLabel("Zoom:")
+            );
+
+            _toolStrip.Items.Add(_zoomCombo);
+        }
+
+        private void InitializeStatusBar()
+        {
+            _statusStrip = new StatusStrip();
+
+            _statusStrip.Items.Add(
+                new ToolStripStatusLabel(
+                    "Nenhum Gump aberto."
+                )
+            );
+        }
+
+        private void InitializeLeftPanel()
+        {
+            _leftPanel = new Panel
+            {
+                Dock = DockStyle.Left,
+                Width = 330,
+                Padding = new Padding(8),
+                BackColor = Color.FromArgb(35, 35, 38)
+            };
+
+            var title = new Label
+            {
+                Text = "ELEMENTOS DO GUMP",
+                Dock = DockStyle.Top,
+                Height = 30,
+                ForeColor = Color.White,
+                Font = new Font(Font, FontStyle.Bold)
+            };
+
+            var pageLabel = new Label
+            {
+                Text = "Página:",
+                Dock = DockStyle.Top,
+                Height = 24,
+                ForeColor = Color.White,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _pageCombo = new ComboBox
+            {
+                Dock = DockStyle.Top,
+                DropDownStyle = ComboBoxStyle.DropDownList,
+                Height = 28
+            };
+
+            _pageCombo.SelectedIndexChanged += PageChanged;
+
+            _elementsList = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                BorderStyle = BorderStyle.FixedSingle,
+                BackColor = Color.FromArgb(25, 25, 28),
+                ForeColor = Color.White,
+                IntegralHeight = false
+            };
+
+            _elementsList.SelectedIndexChanged += ElementListSelected;
+
+            _leftPanel.Controls.Add(_elementsList);
+            _leftPanel.Controls.Add(_pageCombo);
+            _leftPanel.Controls.Add(pageLabel);
+            _leftPanel.Controls.Add(title);
+        }
+
+        private void InitializeProperties()
+        {
+            _propertiesPanel = new Panel
+            {
+                Dock = DockStyle.Right,
+                Width = 330,
+                Padding = new Padding(10),
+                BackColor = Color.FromArgb(35, 35, 38)
+            };
+
+            var tabs = new TabControl
+            {
+                Dock = DockStyle.Fill
+            };
+
+            var propertiesTab = new TabPage("Propriedades");
+            var artTab = new TabPage("Artes");
+            var huesTab = new TabPage("Hues");
+
+            propertiesTab.BackColor =
+                Color.FromArgb(35, 35, 38);
+
+            artTab.BackColor =
+                Color.FromArgb(35, 35, 38);
+
+            huesTab.BackColor =
+                Color.FromArgb(35, 35, 38);
+
+            BuildPropertiesTab(propertiesTab);
+            BuildArtTab(artTab);
+            BuildHuesTab(huesTab);
+
+            tabs.TabPages.Add(propertiesTab);
+            tabs.TabPages.Add(artTab);
+            tabs.TabPages.Add(huesTab);
+
+            _propertiesPanel.Controls.Add(tabs);
+        }
+
+        private void BuildPropertiesTab(TabPage tab)
+        {
+            var layout = new TableLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                ColumnCount = 2,
+                RowCount = 10,
+                Padding = new Padding(4)
+            };
+
+            layout.ColumnStyles.Add(
+                new ColumnStyle(
+                    SizeType.Absolute,
+                    90));
+
+            layout.ColumnStyles.Add(
+                new ColumnStyle(
+                    SizeType.Percent,
+                    100));
+
+            _selectedLabel = new Label
+            {
+                Text = "Nenhum elemento",
+                Dock = DockStyle.Fill,
+                ForeColor = Color.Gold,
+                AutoEllipsis = true,
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            _x = Number();
+            _y = Number();
+            _width = Number(1);
+            _height = Number(1);
+            _art = Number();
+            _button = Number(1);
+            _hue = Number();
+
+            _text = new TextBox
+            {
+                Multiline = true,
+                Height = 90,
+                Dock = DockStyle.Fill,
+                ScrollBars = ScrollBars.Vertical
+            };
+
+            AddPropertyRow(
+                layout,
+                "Elemento",
+                _selectedLabel,
+                0);
+
+            AddPropertyRow(
+                layout,
+                "X",
+                _x,
+                1);
+
+            AddPropertyRow(
+                layout,
+                "Y",
+                _y,
+                2);
+
+            AddPropertyRow(
+                layout,
+                "Largura",
+                _width,
+                3);
+
+            AddPropertyRow(
+                layout,
+                "Altura",
+                _height,
+                4);
+
+            AddPropertyRow(
+                layout,
+                "Art ID",
+                _art,
+                5);
+
+            AddPropertyRow(
+                layout,
+                "Button ID",
+                _button,
+                6);
+
+            AddPropertyRow(
+                layout,
+                "Hue",
+                _hue,
+                7);
+
+            AddPropertyRow(
+                layout,
+                "Texto",
+                _text,
+                8);
+
+            _applyButton = new Button
+            {
+                Text = "APLICAR",
+                Dock = DockStyle.Fill,
+                Height = 26,
+                FlatStyle = FlatStyle.Standard,
+                Cursor = Cursors.Hand
+            };
+
+            _applyButton.MouseDown += ApplyButtonMouseDown;
+            _applyButton.MouseUp += ApplyButtonMouseUp;
+            _applyButton.Click += ApplyProperties;
+
+            layout.Controls.Add(
+                _applyButton,
+                0,
+                9);
+
+            layout.SetColumnSpan(
+                _applyButton,
+                2);
+
+            tab.Controls.Add(layout);
+        }
+
+        private void BuildArtTab(TabPage tab)
+        {
+            var panel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(8)
+            };
+
+            var title = new Label
+            {
+                Text = "VISUALIZADOR DE ARTES",
+                Dock = DockStyle.Top,
+                Height = 28,
+                ForeColor = Color.White,
+                Font = new Font(Font, FontStyle.Bold)
+            };
+
+            var idLabel = new Label
+            {
+                Text = "Art ID",
+                Dock = DockStyle.Top,
+                Height = 22,
+                ForeColor = Color.White
+            };
+
+            _artBrowserId = Number();
+            _artBrowserId.Dock = DockStyle.Top;
+            _artBrowserId.Height = 28;
+            _artBrowserId.ValueChanged += BrowserArtValueChanged;
+
+            var hueLabel = new Label
+            {
+                Text = "Hue",
+                Dock = DockStyle.Top,
+                Height = 22,
+                ForeColor = Color.White
+            };
+
+            _artBrowserHue = Number();
+            _artBrowserHue.Dock = DockStyle.Top;
+            _artBrowserHue.Height = 28;
+            _artBrowserHue.ValueChanged += BrowserHueValueChanged;
+
+            _previewArtButton = new Button
+            {
+                Text = "Visualizar",
+                Dock = DockStyle.Top,
+                Height = 34
+            };
+
+            _previewArtButton.Click += PreviewArt;
+            _previewArtButton.Visible = false;
+
+            _addArtButton = new Button
+            {
+                Text = "Adicionar imagem ao Gump",
+                Dock = DockStyle.Top,
+                Height = 36
+            };
+
+            _addArtButton.Click += AddArtFromBrowser;
+
+            _artPreview = new PictureBox
+            {
+                Dock = DockStyle.Fill,
+                SizeMode = PictureBoxSizeMode.CenterImage,
+                BackColor = Color.FromArgb(20, 20, 22),
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            panel.Controls.Add(_artPreview);
+            panel.Controls.Add(_addArtButton);
+            panel.Controls.Add(_previewArtButton);
+            panel.Controls.Add(_artBrowserHue);
+            panel.Controls.Add(hueLabel);
+            panel.Controls.Add(_artBrowserId);
+            panel.Controls.Add(idLabel);
+            panel.Controls.Add(title);
+
+            tab.Controls.Add(panel);
+        }
+
+        private void BuildHuesTab(TabPage tab)
+        {
+            var panel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(8)
+            };
+
+            var title = new Label
+            {
+                Text = "HUES / CORES",
+                Dock = DockStyle.Top,
+                Height = 28,
+                ForeColor = Color.White,
+                Font = new Font(Font, FontStyle.Bold)
+            };
+
+            _hueList = new ListBox
+            {
+                Dock = DockStyle.Fill,
+                DrawMode = DrawMode.OwnerDrawFixed,
+                ItemHeight = 28,
+                BackColor = Color.FromArgb(25, 25, 28),
+                ForeColor = Color.White
+            };
+
+            _hueList.DrawItem += DrawHueItem;
+            _hueList.SelectedIndexChanged += HueSelected;
+
+            _huePreview = new Panel
+            {
+                Dock = DockStyle.Bottom,
+                Height = 70,
+                BackColor = Color.Black,
+                BorderStyle = BorderStyle.FixedSingle
+            };
+
+            _useHueButton = new Button
+            {
+                Text = "Usar Hue selecionado",
+                Dock = DockStyle.Bottom,
+                Height = 36
+            };
+
+            _useHueButton.Click += UseSelectedHue;
+
+            panel.Controls.Add(_hueList);
+            panel.Controls.Add(_useHueButton);
+            panel.Controls.Add(_huePreview);
+            panel.Controls.Add(title);
+
+            tab.Controls.Add(panel);
+        }
+
+        private static NumericUpDown Number(int value = 0)
+        {
+            return new NumericUpDown
+            {
+                Minimum = -10000,
+                Maximum = 10000,
+                Value = value,
+                Dock = DockStyle.Fill
+            };
+        }
+
+        private static void AddPropertyRow(
+            TableLayoutPanel panel,
+            string caption,
+            Control control,
+            int row)
+        {
+            panel.RowStyles.Add(
+                new RowStyle(SizeType.AutoSize));
+
+            panel.Controls.Add(
+                new Label
+                {
+                    Text = caption,
+                    ForeColor = Color.White,
+                    Dock = DockStyle.Fill,
+                    TextAlign =
+                        ContentAlignment.MiddleLeft,
+                    Padding =
+                        new Padding(0, 5, 0, 5)
+                },
+                0,
+                row);
+
+            panel.Controls.Add(
+                control,
+                1,
+                row);
+        }
+
+        private void OpenFile(object sender, EventArgs e)
+        {
+        if (!ConfirmCloseCurrentDocument())
+        {
+            return;
+        }
+
+        using (var dialog = new OpenFileDialog())
+            {
+        if (!ConfirmCloseCurrentDocument())
+        {
+            return;
+        }
+
+        dialog.Title = "Abrir Gump C#";
+
+                dialog.Filter =
+                    "Arquivos C# (*.cs)|*.cs|Todos os arquivos (*.*)|*.*";
+
+                if (dialog.ShowDialog(this) !=
+                    DialogResult.OK)
+                    return;
+
+                try
+                {
+        if (!ConfirmCloseCurrentDocument())
+        {
+            return;
+        }
+
+        var document =
+                        _documentLoader.Load(
+                            dialog.FileName);
+
+                    _canvas.Document = document;
+
+                    _canvas.ClearArtCache();
+
+                    Text =
+                        "UOGumpDesigner - " +
+                        Path.GetFileName(
+                            dialog.FileName);
+
+                    PopulatePages();
+                    PopulateElements();
+
+                    UpdateProperties();
+                    UpdateStatus();
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show(
+                        this,
+                        "Não foi possível abrir o arquivo.\r\n\r\n" +
+                        ex.Message,
+                        "Erro",
+                        MessageBoxButtons.OK,
+                        MessageBoxIcon.Error);
+                }
+            }
+        }
+
+        private void PopulatePages()
+        {
+            _updatingPage = true;
+
+            try
+            {
+                _pageCombo.Items.Clear();
+
+                if (_canvas.Document == null)
+                    return;
+
+                foreach (var page in
+                         _canvas.Document.GetPages())
+                {
+                    _pageCombo.Items.Add(
+                        "Página " + page);
+                }
+
+                int index = 0;
+
+                foreach (var page in
+                         _canvas.Document.GetPages())
+                {
+                    if (page ==
+                        _canvas.Document.CurrentPage)
+                    {
+                        _pageCombo.SelectedIndex = index;
+                        break;
+                    }
+
+                    index++;
+                }
+
+                if (_pageCombo.SelectedIndex < 0 &&
+                    _pageCombo.Items.Count > 0)
+                {
+                    _pageCombo.SelectedIndex = 0;
+                }
+            }
+            finally
+            {
+                _updatingPage = false;
+            }
+        }
+
+        private void PopulateElements()
+        {
+            _updatingElementsList = true;
+
+            try
+            {
+                _elementsList.Items.Clear();
+
+                if (_canvas.Document == null)
+                    return;
+
+                foreach (var element in
+                         _canvas.Document.GetElementsForPage(
+                             _canvas.Document.CurrentPage))
+                {
+                    _elementsList.Items.Add(element);
+                }
+
+                SelectElementInList(
+                    _canvas.SelectedElement);
+            }
+            finally
+            {
+                _updatingElementsList = false;
+            }
+        }
+
+        private void ElementListSelected(
+            object sender,
+            EventArgs e)
+        {
+            if (_updatingElementsList)
+                return;
+
+            var element =
+                _elementsList.SelectedItem
+                as GumpElement;
+
+            if (element == null)
+                return;
+
+            _canvas.SelectElement(element);
+            UpdateProperties();
+        }
+
+        private void SelectElementInList(
+            GumpElement element)
+        {
+            if (element == null)
+                return;
+
+            for (int i = 0;
+                 i < _elementsList.Items.Count;
+                 i++)
+            {
+                var item =
+                    _elementsList.Items[i]
+                    as GumpElement;
+
+                if (ReferenceEquals(item, element))
+                {
+                    _elementsList.SelectedIndex = i;
+                    _elementsList.TopIndex =
+                        Math.Max(0, i - 3);
+                    break;
+                }
+            }
+        }
+
+        private void PageChanged(
+            object sender,
+            EventArgs e)
+        {
+            if (_updatingPage)
+                return;
+
+            if (_canvas.Document == null)
+                return;
+
+            if (_pageCombo.SelectedIndex < 0)
+                return;
+
+            int page =
+                _pageCombo.SelectedIndex;
+
+            int index = 0;
+
+            foreach (var p in
+                     _canvas.Document.GetPages())
+            {
+                if (index == page)
+                {
+                    _canvas.Document.CurrentPage = p;
+                    _canvas.ClearSelection();
+                    PopulateElements();
+                    UpdateProperties();
+                    _canvas.Invalidate();
+                    return;
+                }
+
+                index++;
+            }
+        }
+
+        private void SaveFile(
+            object sender,
+            EventArgs e)
+        {
+            if (_canvas.Document == null)
+                return;
+
+            string path =
+                _canvas.Document.FilePath;
+
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                SaveAsFile(sender, e);
+                return;
+            }
+
+            SaveToPath(path);
+        }
+
+        private void SaveAsFile(
+            object sender,
+            EventArgs e)
+        {
+            if (_canvas.Document == null)
+                return;
+
+            using (var dialog =
+                   new SaveFileDialog())
+            {
+                dialog.Title =
+                    "Salvar Gump C#";
+
+                dialog.Filter =
+                    "Arquivos C# (*.cs)|*.cs";
+
+                dialog.FileName =
+                    Path.GetFileName(
+                        _canvas.Document.FilePath);
+
+                if (dialog.ShowDialog(this) !=
+                    DialogResult.OK)
+                    return;
+
+                SaveToPath(dialog.FileName);
+            }
+        }
+
+        private void SaveToPath(string path)
+        {
+            try
+            {
+                var document =
+                    _canvas.Document;
+
+                string source =
+                    GumpCodeExporter.Export(
+                        document);
+
+                File.WriteAllText(
+                    path,
+                    source);
+
+                document.SourceCode =
+                    source;
+
+                document.FilePath =
+                    path;
+
+                document.IsModified =
+                    false;
+
+                Text =
+                    "UOGumpDesigner - " +
+                    Path.GetFileName(path);
+
+                UpdateStatus();
+
+                MessageBox.Show(
+                    this,
+                    "Gump salvo com sucesso.\r\n\r\n" +
+                    path,
+                    "Gump Editor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this,
+                    "Erro ao salvar o Gump.\r\n\r\n" +
+                    ex.Message,
+                    "Erro",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private void AddElement(
+            object sender,
+            EventArgs e)
+        {
+            if (_canvas.Document == null)
+            {
+                MessageBox.Show(
+                    this,
+                    "Abra um Gump primeiro.",
+                    "Gump Editor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                return;
+            }
+
+            using (var dialog =
+                   new AddElementDialog())
+            {
+                if (dialog.ShowDialog(this) !=
+                    DialogResult.OK)
+                    return;
+
+                var element =
+                    dialog.Element;
+
+                element.Page =
+                    _canvas.Document.CurrentPage;
+
+                _canvas.Document.AddElement(
+                    element);
+
+                PopulateElements();
+                UpdateStatus();
+
+                _canvas.Invalidate();
+
+                _canvas.SelectElement(
+                    element);
+            }
+        }
+
+        private void DeleteElement(
+            object sender,
+            EventArgs e)
+        {
+            var element =
+                _canvas.SelectedElement;
+
+            if (element == null)
+                return;
+
+            if (MessageBox.Show(
+                    this,
+                    "Excluir o elemento selecionado?",
+                    "Gump Editor",
+                    MessageBoxButtons.YesNo,
+                    MessageBoxIcon.Question) !=
+                DialogResult.Yes)
+                return;
+
+            _canvas.Document.RemoveElement(
+                element);
+
+            _canvas.ClearSelection();
+
+            PopulateElements();
+            UpdateProperties();
+            UpdateStatus();
+
+            _canvas.Invalidate();
+        }
+
+
+        private void BrowserArtValueChanged(
+            object sender,
+            EventArgs e)
+        {
+            PreviewArt(
+                sender,
+                e);
+        }
+
+        private void BrowserHueValueChanged(
+            object sender,
+            EventArgs e)
+        {
+            PreviewArt(
+                sender,
+                e);
+        }
+
+        private void ApplyButtonMouseDown(
+            object sender,
+            MouseEventArgs e)
+        {
+            if (sender is Button button &&
+                e.Button == MouseButtons.Left)
+            {
+                button.BackColor =
+                    SystemColors.ControlDark;
+
+                button.ForeColor =
+                    SystemColors.ControlText;
+
+                button.FlatStyle =
+                    FlatStyle.Flat;
+            }
+        }
+
+        private void ApplyButtonMouseUp(
+            object sender,
+            MouseEventArgs e)
+        {
+            if (sender is Button button &&
+                e.Button == MouseButtons.Left)
+            {
+                button.BackColor =
+                    SystemColors.Control;
+
+                button.ForeColor =
+                    SystemColors.ControlText;
+
+                button.FlatStyle =
+                    FlatStyle.Standard;
+            }
+        }
+        private void ApplyProperties(
+            object sender,
+            EventArgs e)
+        {
+            var element =
+                _canvas.SelectedElement;
+
+            if (element == null)
+                return;
+
+            element.X = (int)_x.Value;
+            element.Y = (int)_y.Value;
+
+            element.Width =
+                Math.Max(
+                    1,
+                    (int)_width.Value);
+
+            element.Height =
+                Math.Max(
+                    1,
+                    (int)_height.Value);
+
+            element.ArtId =
+                Math.Max(
+                    0,
+                    (int)_art.Value);
+
+            element.ButtonId =
+                Math.Max(
+                    0,
+                    (int)_button.Value);
+
+            element.Hue =
+                Math.Max(
+                    0,
+                    (int)_hue.Value);
+
+            element.Text =
+                _text.Text ?? string.Empty;
+
+            _canvas.Document.IsModified = true;
+
+            _canvas.ClearArtCache();
+            _canvas.Invalidate();
+
+            PopulateElements();
+            SelectElementInList(element);
+
+            UpdateProperties();
+            UpdateStatus();
+        }
+
+        private void CanvasSelectedElementChanged(
+            object sender,
+            EventArgs e)
+        {
+            UpdateProperties();
+            SelectElementInList(
+                _canvas.SelectedElement);
+            UpdateStatus();
+        }
+
+        private void UpdateProperties()
+        {
+            var element =
+                _canvas.SelectedElement;
+try
+            {
+                if (element == null)
+                {
+                    _selectedLabel.Text =
+                        "Nenhum elemento";
+
+                    _x.Value = 0;
+                    _y.Value = 0;
+                    _width.Value = 1;
+                    _height.Value = 1;
+                    _art.Value = 0;
+                    _button.Value = 1;
+                    _hue.Value = 0;
+                    _text.Text = string.Empty;
+
+                    return;
+                }
+
+                _selectedLabel.Text =
+                    element.Type +
+                    " | Linha " +
+                    element.SourceLine;
+
+                SetValue(
+                    _x,
+                    element.X);
+
+                SetValue(
+                    _y,
+                    element.Y);
+
+                SetValue(
+                    _width,
+                    Math.Max(
+                        1,
+                        element.Width));
+
+                SetValue(
+                    _height,
+                    Math.Max(
+                        1,
+                        element.Height));
+
+                SetValue(
+                    _art,
+                    element.ArtId);
+
+                SetValue(
+                    _button,
+                    element.ButtonId);
+
+                SetValue(
+                    _hue,
+                    element.Hue);
+
+                _text.Text =
+                    element.Text ??
+                    string.Empty;
+
+                _artBrowserId.Value =
+                    Math.Max(
+                        _artBrowserId.Minimum,
+                        Math.Min(
+                            _artBrowserId.Maximum,
+                            element.ArtId));
+
+                _artBrowserHue.Value =
+                    Math.Max(
+                        _artBrowserHue.Minimum,
+                        Math.Min(
+                            _artBrowserHue.Maximum,
+                            element.Hue));
+            }
+            finally
+            {
+}
+        }
+
+        private static void SetValue(
+            NumericUpDown control,
+            int value)
+        {
+            if (value < control.Minimum)
+                value = (int)control.Minimum;
+
+            if (value > control.Maximum)
+                value = (int)control.Maximum;
+
+            control.Value = value;
+        }
+
+        private void PreviewArt(
+            object sender,
+            EventArgs e)
+        {
+            if (_gumpArtReader == null)
+            {
+                MessageBox.Show(
+                    this,
+                    "As artes do Gump não foram carregadas.",
+                    "Gump Editor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Warning);
+
+                return;
+            }
+
+            int artId =
+                (int)_artBrowserId.Value;
+
+            int hue =
+                (int)_artBrowserHue.Value;
+
+            try
+            {
+                var image =
+                    _gumpArtReader.GetGump(
+                        artId);
+
+                if (image == null)
+                {
+                    _artPreview.Image = null;
+                    return;
+                }
+
+                if (_hueReader != null &&
+                    hue > 0)
+                {
+                    image =
+                        _hueReader.ApplyHue(
+                            image,
+                            hue);
+                }
+
+                var old =
+                    _artPreview.Image;
+
+                _artPreview.Image =
+                    image;
+
+                if (old != null)
+                    old.Dispose();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    this,
+                    "Erro ao visualizar a arte.\r\n\r\n" +
+                    ex.Message,
+                    "Gump Editor",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+            }
+        }
+
+        private void AddArtFromBrowser(
+            object sender,
+            EventArgs e)
+        {
+            if (_canvas.Document == null)
+                return;
+
+            var element = new GumpElement
+            {
+                Type = GumpElementType.Image,
+                X = 20,
+                Y = 20,
+                ArtId = (int)_artBrowserId.Value,
+                Hue = (int)_artBrowserHue.Value,
+                Page =
+                    _canvas.Document.CurrentPage
+            };
+
+            try
+            {
+                if (_gumpArtReader != null)
+                {
+                    var image =
+                        _gumpArtReader.GetGump(
+                            element.ArtId);
+
+                    if (image != null)
+                    {
+                        element.Width =
+                            image.Width;
+
+                        element.Height =
+                            image.Height;
+                    }
+                }
+            }
+            catch
+            {
+                element.Width = 44;
+                element.Height = 44;
+            }
+
+            _canvas.Document.AddElement(element);
+
+            PopulateElements();
+
+            _canvas.SelectElement(element);
+
+            UpdateProperties();
+            UpdateStatus();
+
+            _canvas.Invalidate();
+        }
+
+        private void PopulateHueList()
+        {
+            if (_hueList == null ||
+                _hueReader == null)
+                return;
+
+            _hueList.Items.Clear();
+
+            foreach (var hue in _hueReader.Hues)
+            {
+                _hueList.Items.Add(hue);
+            }
+        }
+
+        private void DrawHueItem(
+            object sender,
+            DrawItemEventArgs e)
+        {
+            if (e.Index < 0 ||
+                _hueReader == null)
+                return;
+
+            var hue =
+                _hueList.Items[e.Index]
+                as HueData;
+
+            if (hue == null)
+                return;
+
+            e.DrawBackground();
+
+            using (var brush =
+                   new SolidBrush(
+                       GetHueColor(hue)))
+            {
+                var rect =
+                    new Rectangle(
+                        e.Bounds.X + 4,
+                        e.Bounds.Y + 4,
+                        40,
+                        e.Bounds.Height - 8);
+
+                e.Graphics.FillRectangle(
+                    brush,
+                    rect);
+            }
+
+            using (var brush =
+                   new SolidBrush(Color.White))
+            {
+                string text =
+                    hue.Id +
+                    " - " +
+                    hue.Name;
+
+                e.Graphics.DrawString(
+                    text,
+                    Font,
+                    brush,
+                    e.Bounds.X + 52,
+                    e.Bounds.Y + 5);
+            }
+
+            e.DrawFocusRectangle();
+        }
+
+        private Color GetHueColor(
+            HueData hue)
+        {
+            if (hue == null ||
+                hue.Colors == null ||
+                hue.Colors.Length == 0)
+                return Color.Gray;
+
+            return hue.Colors[
+                hue.Colors.Length / 2];
+        }
+
+        private static uint HueColorToRgb(
+            ushort c)
+        {
+            byte[] table =
+            {
+                0x00, 0x08, 0x10, 0x18,
+                0x20, 0x29, 0x31, 0x39,
+                0x41, 0x4A, 0x52, 0x5A,
+                0x62, 0x6A, 0x73, 0x7B,
+                0x83, 0x8B, 0x94, 0x9C,
+                0xA4, 0xAC, 0xB4, 0xBD,
+                0xC5, 0xCD, 0xD5, 0xDE,
+                0xE6, 0xEE, 0xF6, 0xFF
+            };
+
+            return (uint)(
+                table[(c >> 10) & 0x1F] |
+                (table[(c >> 5) & 0x1F] << 8) |
+                (table[c & 0x1F] << 16));
+        }
+
+        private void HueSelected(
+            object sender,
+            EventArgs e)
+        {
+            if (_hueList.SelectedItem == null)
+                return;
+
+            var hue =
+                _hueList.SelectedItem as HueData;
+
+            if (hue == null)
+                return;
+
+            _huePreview.BackColor =
+                GetHueColor(hue);
+        }
+
+        private void UseSelectedHue(
+            object sender,
+            EventArgs e)
+        {
+            if (_hueList.SelectedItem == null)
+                return;
+
+            var hue =
+                _hueList.SelectedItem as HueData;
+
+            if (hue == null)
+                return;
+
+            _hue.Value =
+                Math.Max(
+                    _hue.Minimum,
+                    Math.Min(
+                        _hue.Maximum,
+                        hue.Id));
+
+            _artBrowserHue.Value =
+                Math.Max(
+                    _artBrowserHue.Minimum,
+                    Math.Min(
+                        _artBrowserHue.Maximum,
+                        hue.Id));
+
+            PreviewArt(
+                sender,
+                e);
+        }
+
+        private void UpdateStatus()
+        {
+            if (_canvas.Document == null)
+                return;
+
+            var document =
+                _canvas.Document;
+
+            _statusStrip.Items.Clear();
+
+            string modified =
+                document.IsModified
+                    ? " *"
+                    : string.Empty;
+
+            string selected =
+                _canvas.SelectedElement == null
+                    ? "Nenhum elemento selecionado"
+                    : _canvas.SelectedElement.Type.ToString();
+
+            _statusStrip.Items.Add(
+                new ToolStripStatusLabel(
+                    document.Name +
+                    modified +
+                    " | " +
+                    document.Width +
+                    "x" +
+                    document.Height +
+                    " | " +
+                    document.Elements.Count +
+                    " elementos" +
+                    " | " +
+                    selected));
+        }
+
+        private void ZoomChanged(
+            object sender,
+            EventArgs e)
+        {
+            if (_zoomCombo.SelectedItem == null)
+                return;
+
+            string text =
+                _zoomCombo.SelectedItem.ToString();
+
+            text =
+                text.Replace(
+                    "%",
+                    string.Empty);
+
+            float percentage;
+
+            if (!float.TryParse(
+                    text,
+                    out percentage))
+                return;
+
+            _canvas.Zoom =
+                percentage / 100f;
+
+            _canvas.Invalidate();
+        }
+
+        private void ToggleGrid(
+            object sender,
+            EventArgs e)
+        {
+            var item =
+                sender as ToolStripMenuItem;
+
+            if (item == null)
+                return;
+
+            item.Checked =
+                !item.Checked;
+
+            _gridButton.Checked =
+                item.Checked;
+
+            _canvas.ShowGrid =
+                item.Checked;
+
+            _canvas.Invalidate();
+        }
+
+        // ====================================================
+        // CRIA O PAINEL VISUAL DE EDICAO DE TEXTO
+        // ====================================================
+
+        private void BuildVisualTextEditor()
+{
+    _gumpTextEditorPanel = new Panel
+    {
+        Dock = DockStyle.Bottom,
+        Height = 330,
+        Padding = new Padding(8),
+        BorderStyle = BorderStyle.FixedSingle,
+        BackColor = SystemColors.Control
+    };
+
+    _gumpTextEditorTitle = new Label
+    {
+        Text = "EDITOR DE TEXTO DO GUMP",
+        Dock = DockStyle.Top,
+        Height = 28,
+        Font = new Font(
+            "Segoe UI",
+            9f,
+            FontStyle.Bold),
+        TextAlign = ContentAlignment.MiddleCenter
+    };
+
+    _gumpTextEditor = new RichTextBox
+    {
+        Dock = DockStyle.Top,
+        Height = 82,
+        Multiline = true,
+        ScrollBars = RichTextBoxScrollBars.Vertical
+    };
+
+    _gumpFontInfo = new Label
+    {
+        Text = "Fonte UO:",
+        Dock = DockStyle.Top,
+        Height = 20
+    };
+
+    /*
+     * O ComboBox NÃO usa System.Drawing.Font.
+     *
+     * Cada item representa diretamente um font ID
+     * existente em fonts.mul.
+     */
+    _gumpFontCombo = new ComboBox
+    {
+        Dock = DockStyle.Top,
+        DropDownStyle = ComboBoxStyle.DropDownList,
+        DrawMode = DrawMode.OwnerDrawFixed,
+        ItemHeight = 32,
+        DropDownHeight = 450
+    };
+
+    if (_uoFontReader != null &&
+        _uoFontReader.Fonts != null)
+    {
+        for (int i = 0;
+             i < _uoFontReader.Fonts.Count;
+             i++)
+        {
+            _gumpFontCombo.Items.Add(
+                "Font " + i);
+        }
+    }
+
+    if (_gumpFontCombo.Items.Count > 0)
+        _gumpFontCombo.SelectedIndex = 0;
+
+    _gumpFontCombo.DrawItem +=
+        GumpFontComboDrawItem;
+
+    _gumpFontCombo.SelectedIndexChanged +=
+        GumpFontComboChanged;
+
+    Label sizeLabel = new Label
+    {
+        Text = "Escala da fonte UO:",
+        Dock = DockStyle.Top,
+        Height = 20
+    };
+
+    _gumpSizeCombo = new ComboBox
+    {
+        Dock = DockStyle.Top,
+        DropDownStyle = ComboBoxStyle.DropDownList
+    };
+
+    int[] sizes =
+    {
+        8, 9, 10, 11, 12, 14, 16, 18,
+        20, 22, 24, 26, 28, 32, 36, 40
+    };
+
+    foreach (int size in sizes)
+        _gumpSizeCombo.Items.Add(
+            size.ToString());
+
+    _gumpSizeCombo.SelectedItem = "12";
+
+    _gumpSizeCombo.SelectedIndexChanged +=
+        GumpTextPropertiesChanged;
+
+    Label alignLabel = new Label
+    {
+        Text = "Alinhamento:",
+        Dock = DockStyle.Top,
+        Height = 20
+    };
+
+    _gumpAlignCombo = new ComboBox
+    {
+        Dock = DockStyle.Top,
+        DropDownStyle = ComboBoxStyle.DropDownList
+    };
+
+    _gumpAlignCombo.Items.Add("Esquerda");
+    _gumpAlignCombo.Items.Add("Centro");
+    _gumpAlignCombo.Items.Add("Direita");
+    _gumpAlignCombo.Items.Add("Justificado");
+
+    _gumpAlignCombo.SelectedIndex = 0;
+
+    _gumpAlignCombo.SelectedIndexChanged +=
+        GumpTextPropertiesChanged;
+
+    Label hueLabel = new Label
+    {
+        Text = "Hue UO:",
+        Dock = DockStyle.Top,
+        Height = 20
+    };
+
+    _gumpHueNumeric = new NumericUpDown
+    {
+        Dock = DockStyle.Top,
+        Minimum = 0,
+        Maximum = 65535,
+        Value = 0
+    };
+
+    Panel buttons = new Panel
+    {
+        Dock = DockStyle.Top,
+        Height = 36
+    };
+
+    _gumpBoldButton = new Button
+    {
+        Text = "B",
+        Width = 42,
+        Height = 30,
+        Left = 0,
+        Font = new Font(
+            "Segoe UI",
+            9f,
+            FontStyle.Bold)
+    };
+
+    _gumpItalicButton = new Button
+    {
+        Text = "I",
+        Width = 42,
+        Height = 30,
+        Left = 46,
+        Font = new Font(
+            "Segoe UI",
+            9f,
+            FontStyle.Italic)
+    };
+
+    _gumpUnderlineButton = new Button
+    {
+        Text = "U",
+        Width = 42,
+        Height = 30,
+        Left = 92,
+        Font = new Font(
+            "Segoe UI",
+            9f,
+            FontStyle.Underline)
+    };
+
+    _gumpBoldButton.Click += delegate
+    {
+        bool active =
+            !Convert.ToBoolean(
+                _gumpBoldButton.Tag ?? false);
+
+        _gumpBoldButton.Tag = active;
+
+        _gumpBoldButton.BackColor =
+            active
+                ? SystemColors.Highlight
+                : SystemColors.Control;
+    };
+
+    _gumpItalicButton.Click += delegate
+    {
+        bool active =
+            !Convert.ToBoolean(
+                _gumpItalicButton.Tag ?? false);
+
+        _gumpItalicButton.Tag = active;
+
+        _gumpItalicButton.BackColor =
+            active
+                ? SystemColors.Highlight
+                : SystemColors.Control;
+    };
+
+    _gumpUnderlineButton.Click += delegate
+    {
+        bool active =
+            !Convert.ToBoolean(
+                _gumpUnderlineButton.Tag ?? false);
+
+        _gumpUnderlineButton.Tag = active;
+
+        _gumpUnderlineButton.BackColor =
+            active
+                ? SystemColors.Highlight
+                : SystemColors.Control;
+    };
+
+    buttons.Controls.Add(
+        _gumpBoldButton);
+
+    buttons.Controls.Add(
+        _gumpItalicButton);
+
+    buttons.Controls.Add(
+        _gumpUnderlineButton);
+
+    _gumpApplyTextButton = new Button
+    {
+        Text = "APLICAR ALTERACOES",
+        Dock = DockStyle.Bottom,
+        Height = 38,
+        Font = new Font(
+            "Segoe UI",
+            9f,
+            FontStyle.Bold)
+    };
+
+    _gumpApplyTextButton.Click += delegate
+    {
+        ApplyVisualTextEditor();
+    };
+
+    _gumpTextEditorPanel.Controls.Add(
+        _gumpApplyTextButton);
+
+    _gumpTextEditorPanel.Controls.Add(
+        _gumpTextEditor);
+
+    _gumpTextEditorPanel.Controls.Add(
+        _gumpTextEditorTitle);
+
+    _gumpTextEditorPanel.Controls.Add(
+        hueLabel);
+
+    _gumpTextEditorPanel.Controls.Add(
+        _gumpHueNumeric);
+
+    _gumpTextEditorPanel.Controls.Add(
+        alignLabel);
+
+    _gumpTextEditorPanel.Controls.Add(
+        _gumpAlignCombo);
+
+    _gumpTextEditorPanel.Controls.Add(
+        sizeLabel);
+
+    _gumpTextEditorPanel.Controls.Add(
+        _gumpSizeCombo);
+
+    _gumpTextEditorPanel.Controls.Add(
+        _gumpFontInfo);
+
+    _gumpTextEditorPanel.Controls.Add(
+        _gumpFontCombo);
+
+    _gumpTextEditorPanel.Controls.Add(
+        buttons);
+
+    if (_propertiesPanel != null)
+    {
+        _propertiesPanel.Controls.Add(
+            _gumpTextEditorPanel);
+
+        _gumpTextEditorPanel.BringToFront();
+    }
+}
+        private void GumpFontComboDrawItem(
+    object sender,
+    DrawItemEventArgs e)
+{
+    if (e.Index < 0)
+        return;
+
+    e.DrawBackground();
+
+    int fontId = e.Index;
+
+    if (_uoFontReader != null &&
+        fontId >= 0 &&
+        fontId < _uoFontReader.Fonts.Count)
+    {
+        try
+        {
+            Bitmap preview =
+                _uoFontReader.RenderText(
+                    fontId,
+                    "AaBbCc 0123456789",
+                    Color.White,
+                    1.0f);
+
+            if (preview != null)
+            {
+                int maxWidth =
+                    Math.Max(
+                        1,
+                        e.Bounds.Width - 70);
+
+                int maxHeight =
+                    Math.Max(
+                        1,
+                        e.Bounds.Height - 4);
+
+                float scale = 1.0f;
+
+                if (preview.Width > maxWidth)
+                    scale =
+                        Math.Min(
+                            scale,
+                            (float)maxWidth /
+                            preview.Width);
+
+                if (preview.Height > maxHeight)
+                    scale =
+                        Math.Min(
+                            scale,
+                            (float)maxHeight /
+                            preview.Height);
+
+                int width =
+                    Math.Max(
+                        1,
+                        (int)(preview.Width * scale));
+
+                int height =
+                    Math.Max(
+                        1,
+                        (int)(preview.Height * scale));
+
+                Rectangle rect =
+                    new Rectangle(
+                        e.Bounds.X + 4,
+                        e.Bounds.Y +
+                            ((e.Bounds.Height -
+                              height) / 2),
+                        width,
+                        height);
+
+                e.Graphics.DrawImage(
+                    preview,
+                    rect);
+
+                preview.Dispose();
+            }
+        }
+        catch
+        {
+        }
+    }
+
+    using (var brush =
+           new SolidBrush(
+               e.ForeColor))
+    {
+        e.Graphics.DrawString(
+            "Font " + fontId,
+            e.Font,
+            brush,
+            e.Bounds.Right - 58,
+            e.Bounds.Y + 8);
+    }
+
+    e.DrawFocusRectangle();
+}
+
+private void GumpFontComboChanged(
+    object sender,
+    EventArgs e)
+{
+    if (_gumpFontCombo == null)
+        return;
+
+    if (_gumpFontCombo.SelectedIndex < 0)
+        return;
+
+    _selectedUoFont =
+        _gumpFontCombo.SelectedIndex;
+
+    if (_gumpFontInfo != null)
+    {
+        _gumpFontInfo.Text =
+            "Fonte UO " +
+            _selectedUoFont +
+            " — glyphs reais de fonts.mul";
+    }
+
+    if (_canvas != null)
+        _canvas.Invalidate();
+}
+
+private void GumpTextPropertiesChanged(
+    object sender,
+    EventArgs e)
+{
+    if (_canvas != null)
+        _canvas.Invalidate();
+}
+private void LoadSelectedElementIntoTextEditor()
+{
+    if (_canvas == null ||
+        _gumpTextEditorPanel == null)
+    {
+        return;
+    }
+
+    GumpElement element =
+        _canvas.SelectedElement;
+
+    if (element == null)
+    {
+        _gumpTextEditorPanel.Visible = true;
+        return;
+    }
+
+    string typeName =
+        element.GetType().Name;
+
+    bool isText =
+        typeName.IndexOf(
+            "Label",
+            StringComparison.OrdinalIgnoreCase) >= 0
+        ||
+        typeName.IndexOf(
+            "Text",
+            StringComparison.OrdinalIgnoreCase) >= 0
+        ||
+        typeName.IndexOf(
+            "Html",
+            StringComparison.OrdinalIgnoreCase) >= 0;
+
+    if (!isText)
+    {
+        _gumpTextEditorPanel.Visible = true;
+        return;
+    }
+
+    _gumpTextEditorPanel.Visible = true;
+
+    // --------------------------------------------------------
+    // TEXTO
+    // --------------------------------------------------------
+
+    _gumpTextEditor.Text =
+        element.Text ??
+        string.Empty;
+
+    // --------------------------------------------------------
+    // FONTE UO
+    // --------------------------------------------------------
+
+    int fontId =
+        element.Font;
+
+    if (fontId < 0 ||
+        _uoFontReader == null ||
+        fontId >= _uoFontReader.Fonts.Count)
+    {
+        fontId = 0;
+    }
+
+    if (_gumpFontCombo != null &&
+        fontId < _gumpFontCombo.Items.Count)
+    {
+        _gumpFontCombo.SelectedIndex =
+            fontId;
+    }
+
+    _selectedUoFont =
+        fontId;
+
+    if (_gumpFontInfo != null)
+    {
+        _gumpFontInfo.Text =
+            "Fonte UO " +
+            fontId +
+            " — glyphs reais de fonts.mul";
+    }
+
+    // --------------------------------------------------------
+    // TAMANHO / ESCALA
+    // --------------------------------------------------------
+
+    if (_gumpSizeCombo != null)
+    {
+        string sizeText =
+            element.TextSize > 0
+                ? element.TextSize.ToString()
+                : "12";
+
+        int index =
+            _gumpSizeCombo.Items.IndexOf(
+                sizeText);
+
+        if (index >= 0)
+        {
+            _gumpSizeCombo.SelectedIndex =
+                index;
+        }
+        else
+        {
+            _gumpSizeCombo.SelectedItem =
+                "12";
+        }
+    }
+
+    // --------------------------------------------------------
+    // ALINHAMENTO
+    // --------------------------------------------------------
+
+    if (_gumpAlignCombo != null)
+    {
+        int align =
+            element.TextAlign;
+
+        if (align < 0 ||
+            align >= _gumpAlignCombo.Items.Count)
+        {
+            align = 0;
+        }
+
+        _gumpAlignCombo.SelectedIndex =
+            align;
+    }
+
+    // --------------------------------------------------------
+    // HUE
+    // --------------------------------------------------------
+
+    if (_gumpHueNumeric != null)
+    {
+        decimal hue =
+            element.Hue;
+
+        if (hue < _gumpHueNumeric.Minimum)
+            hue = _gumpHueNumeric.Minimum;
+
+        if (hue > _gumpHueNumeric.Maximum)
+            hue = _gumpHueNumeric.Maximum;
+
+        _gumpHueNumeric.Value =
+            hue;
+    }
+
+    if (_canvas != null)
+        _canvas.Invalidate();
+}
+
+
+        // ====================================================
+        // APLICA AS ALTERACOES AO ELEMENTO
+        // ====================================================
+
+        private void ApplyVisualTextEditor()
+{
+    if (_canvas == null ||
+        _canvas.SelectedElement == null ||
+        _gumpTextEditor == null)
+    {
+        return;
+    }
+
+    GumpElement element =
+        _canvas.SelectedElement;
+
+    string html =
+        _gumpTextEditor.Text ??
+        string.Empty;
+
+    html = html.Trim();
+
+    // --------------------------------------------------------
+    // TEXTO
+    // --------------------------------------------------------
+
+    element.Text =
+        html;
+
+    // --------------------------------------------------------
+    // FONTE REAL DO ULTIMA ONLINE
+    // --------------------------------------------------------
+
+    int fontId = 0;
+
+    if (_gumpFontCombo != null &&
+        _gumpFontCombo.SelectedIndex >= 0)
+    {
+        fontId =
+            _gumpFontCombo.SelectedIndex;
+    }
+
+    if (_uoFontReader != null)
+    {
+        if (fontId < 0 ||
+            fontId >= _uoFontReader.Fonts.Count)
+        {
+            fontId = 0;
+        }
+    }
+
+    /*
+     * Este é o ponto importante:
+     *
+     * NÃO estamos criando Font("Arial", ...).
+     *
+     * Estamos armazenando o ID da fonte de fonts.mul
+     * no próprio GumpElement.
+     */
+    element.Font =
+        fontId;
+
+    _selectedUoFont =
+        fontId;
+
+    // --------------------------------------------------------
+    // TAMANHO
+    //
+    // É escala visual dos glyphs bitmap UO.
+    // --------------------------------------------------------
+
+    int size = 12;
+
+    if (_gumpSizeCombo != null &&
+        _gumpSizeCombo.SelectedItem != null)
+    {
+        int.TryParse(
+            _gumpSizeCombo.SelectedItem.ToString(),
+            out size);
+
+        if (size <= 0)
+            size = 12;
+    }
+
+    element.TextSize =
+        size;
+
+    // --------------------------------------------------------
+    // ALINHAMENTO
+    // --------------------------------------------------------
+
+    if (_gumpAlignCombo != null &&
+        _gumpAlignCombo.SelectedIndex >= 0)
+    {
+        element.TextAlign =
+            _gumpAlignCombo.SelectedIndex;
+    }
+
+    // --------------------------------------------------------
+    // HUE
+    // --------------------------------------------------------
+
+    if (_gumpHueNumeric != null)
+    {
+        element.Hue =
+            (int)_gumpHueNumeric.Value;
+    }
+
+    // --------------------------------------------------------
+    // NÃO inserir automaticamente:
+    //
+    // <font face="">
+    // <font size="">
+    // <font color="">
+    //
+    // A informação visual da fonte está no GumpElement.
+    // --------------------------------------------------------
+
+    if (_canvas.Document != null)
+        _canvas.Document.IsModified = true;
+
+    _canvas.Invalidate();
+
+    LoadSelectedElementIntoTextEditor();
+}
+
+    }
+}
+
+
+
