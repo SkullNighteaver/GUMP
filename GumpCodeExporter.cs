@@ -21,74 +21,189 @@ namespace GumpEditor.Parsing
             if (document == null)
                 throw new ArgumentNullException(nameof(document));
 
-            string source =
-                document.SourceCode ?? string.Empty;
+            string source = document.SourceCode ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(source))
-                throw new InvalidOperationException(
-                    "O documento não possui código-fonte.");
+                throw new InvalidOperationException("O documento não possui código-fonte.");
 
-            var replacements =
-                new List<Tuple<string, string>>();
+            // Cada elemento é associado à sua ocorrência sequencial no código original.
+            // Isso evita trocar a primeira ocorrência sempre que existirem comandos iguais.
+            var replacements = new List<Tuple<int, int, string>>();
+            var occurrenceBySource = new Dictionary<string, int>(StringComparer.Ordinal);
 
             foreach (var element in document.Elements)
             {
-
-                if (string.IsNullOrWhiteSpace(element.SourceCode))
+                if (element == null || string.IsNullOrWhiteSpace(element.SourceCode))
                     continue;
 
-                string generated =
-                    GenerateElement(element);
+                string key = element.SourceCode;
+                int occurrence = 0;
+                if (occurrenceBySource.ContainsKey(key))
+                    occurrence = occurrenceBySource[key];
+                occurrenceBySource[key] = occurrence + 1;
 
-                if (string.IsNullOrWhiteSpace(generated))
-                    continue;
-
-                replacements.Add(
-                    Tuple.Create(
-                        element.SourceCode,
-                        generated));
-            }
-
-            foreach (var replacement in replacements)
-            {
-                int index =
-                    source.IndexOf(
-                        replacement.Item1,
-                        StringComparison.Ordinal);
-
+                int index = FindOccurrence(source, key, occurrence);
                 if (index < 0)
                     continue;
 
-                source =
-                    source.Substring(0, index) +
-                    replacement.Item2 +
-                    source.Substring(
-                        index +
-                        replacement.Item1.Length);
+                string generated = GenerateElement(element);
+                if (string.IsNullOrWhiteSpace(generated))
+                    continue;
+
+                replacements.Add(Tuple.Create(index, key.Length, generated));
             }
 
-            var newElements =
-                new List<GumpElement>();
+            replacements.Sort(delegate(Tuple<int, int, string> a, Tuple<int, int, string> b)
+            {
+                return b.Item1.CompareTo(a.Item1);
+            });
 
+            foreach (var replacement in replacements)
+            {
+                source = source.Substring(0, replacement.Item1) +
+                         PreserveOriginalFormatting(source.Substring(replacement.Item1, replacement.Item2), replacement.Item3) +
+                         source.Substring(replacement.Item1 + replacement.Item2);
+            }
+
+            var newElements = new List<GumpElement>();
             foreach (var element in document.Elements)
             {
-
-                if (string.IsNullOrWhiteSpace(
-                        element.SourceCode))
-                {
+                if (element != null && string.IsNullOrWhiteSpace(element.SourceCode))
                     newElements.Add(element);
-                }
             }
 
             if (newElements.Count > 0)
-            {
-                source =
-                    InsertNewElements(
-                        source,
-                        newElements);
-            }
+                source = InsertNewElements(source, newElements);
 
             return source;
+        }
+
+        private static int FindOccurrence(string source, string value, int occurrence)
+        {
+            int index = -1;
+            int start = 0;
+
+            for (int i = 0; i <= occurrence; i++)
+            {
+                index = source.IndexOf(value, start, StringComparison.Ordinal);
+                if (index < 0)
+                    return -1;
+                start = index + value.Length;
+            }
+
+            return index;
+        }
+
+        private static string PreserveOriginalFormatting(string originalCommand, string generatedCommand)
+        {
+            if (string.IsNullOrEmpty(originalCommand))
+                return generatedCommand;
+
+            int originalOpen = originalCommand.IndexOf('(');
+            int originalClose = originalCommand.LastIndexOf(')');
+            int generatedOpen = generatedCommand.IndexOf('(');
+            int generatedClose = generatedCommand.LastIndexOf(')');
+
+            if (originalOpen < 0 || originalClose <= originalOpen ||
+                generatedOpen < 0 || generatedClose <= generatedOpen)
+                return generatedCommand;
+
+            string originalHead = originalCommand.Substring(0, originalOpen + 1);
+            string originalArgs = originalCommand.Substring(originalOpen + 1, originalClose - originalOpen - 1);
+            string originalTail = originalCommand.Substring(originalClose);
+            string generatedArgs = generatedCommand.Substring(generatedOpen + 1, generatedClose - generatedOpen - 1);
+
+            var oldArgs = SplitTopLevelArguments(originalArgs);
+            var newArgs = SplitTopLevelArguments(generatedArgs);
+
+            if (oldArgs.Count != newArgs.Count)
+                return generatedCommand;
+
+            var builder = new StringBuilder();
+            builder.Append(originalHead);
+
+            for (int i = 0; i < oldArgs.Count; i++)
+            {
+                string oldArg = oldArgs[i];
+                string newArg = newArgs[i];
+
+                int lead = 0;
+                while (lead < oldArg.Length && char.IsWhiteSpace(oldArg[lead])) lead++;
+
+                int trail = oldArg.Length;
+                while (trail > lead && char.IsWhiteSpace(oldArg[trail - 1])) trail--;
+
+                builder.Append(oldArg.Substring(0, lead));
+                builder.Append(newArg.Trim());
+                builder.Append(oldArg.Substring(trail));
+
+                if (i < oldArgs.Count - 1)
+                    builder.Append(',');
+            }
+
+            builder.Append(originalTail);
+            return builder.ToString();
+        }
+
+        private static List<string> SplitTopLevelArguments(string text)
+        {
+            var result = new List<string>();
+            int start = 0;
+            int depth = 0;
+            bool inString = false;
+            bool inChar = false;
+            bool escaped = false;
+            bool verbatim = false;
+
+            for (int i = 0; i < text.Length; i++)
+            {
+                char c = text[i];
+                char n = i + 1 < text.Length ? text[i + 1] : '\0';
+
+                if (inString)
+                {
+                    if (verbatim)
+                    {
+                        if (c == '"')
+                        {
+                            if (n == '"') i++;
+                            else { inString = false; verbatim = false; }
+                        }
+                    }
+                    else
+                    {
+                        if (escaped) escaped = false;
+                        else if (c == '\\') escaped = true;
+                        else if (c == '"') inString = false;
+                    }
+                    continue;
+                }
+
+                if (inChar)
+                {
+                    if (escaped) escaped = false;
+                    else if (c == '\\') escaped = true;
+                    else if (c == '\'') inChar = false;
+                    continue;
+                }
+
+                if (c == '@' && n == '"') { inString = true; verbatim = true; i++; continue; }
+                if (c == '"') { inString = true; continue; }
+                if (c == '\'') { inChar = true; continue; }
+
+                if (c == '(' || c == '[' || c == '{') depth++;
+                else if (c == ')' || c == ']' || c == '}') depth--;
+                else if (c == ',' && depth == 0)
+                {
+                    result.Add(text.Substring(start, i - start));
+                    start = i + 1;
+                }
+            }
+
+            if (text.Length > 0 || start == 0)
+                result.Add(text.Substring(start));
+
+            return result;
         }
 
         private static string GenerateElement(

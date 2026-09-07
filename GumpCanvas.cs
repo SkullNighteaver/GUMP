@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -12,7 +12,12 @@ namespace GumpEditor.Rendering
     public sealed class GumpCanvas : Control
     {
         private GumpElement _selectedElement;
+
+        private readonly List<GumpElement> _selectedElements =
+            new List<GumpElement>();
 
+        private readonly Dictionary<GumpElement, Point> _dragStartPositions =
+            new Dictionary<GumpElement, Point>();
         private bool _dragging;
 
         private Point _dragStart;
@@ -79,13 +84,19 @@ namespace GumpEditor.Rendering
 
         public HueReader HueReader { get; set; }
 
-        public UoFontReader UoFontReader { get; set; }
-
-        public GumpElement SelectedElement
+        public UoFontReader UoFontReader { get; set; }        public GumpElement SelectedElement
         {
             get
             {
                 return _selectedElement;
+            }
+        }
+
+        public IReadOnlyList<GumpElement> SelectedElements
+        {
+            get
+            {
+                return _selectedElements.AsReadOnly();
             }
         }
 
@@ -1055,7 +1066,7 @@ namespace GumpEditor.Rendering
 
             try
             {
-                int fontId = element.Font;
+                int fontId = 0;
 
                 /*
                  * O cliente UO possui as fontes 0..9.
@@ -1146,6 +1157,34 @@ namespace GumpEditor.Rendering
 
             string sourceText =
                 element.Text ?? string.Empty;
+            // Fonte padrão para AddHtml.
+            // Sem face="N", utiliza Font 0.
+
+            int htmlFontId = 0;
+
+            Match htmlFaceMatch =
+                Regex.Match(
+                    sourceText,
+                    @"face\s*=\s*[""']?(\d+)",
+                    RegexOptions.IgnoreCase);
+
+            if (htmlFaceMatch.Success)
+            {
+                int parsedFontId;
+
+                if (int.TryParse(
+                    htmlFaceMatch.Groups[1].Value,
+                    out parsedFontId))
+                {
+                    if (UoFontReader != null &&
+                        parsedFontId >= 0 &&
+                        parsedFontId < UoFontReader.Fonts.Count)
+                    {
+                        htmlFontId = parsedFontId;
+                    }
+                }
+            }
+
 
             /*
              * ========================================================
@@ -1249,7 +1288,7 @@ namespace GumpEditor.Rendering
              * AddLabel continua usando a lÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³pria jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ existente.
              */
 
-            int fontId = element.Font;
+            int fontId = htmlFontId;
 
             if (fontId < 0 ||
                 fontId >= UoFontReader.Fonts.Count)
@@ -1749,66 +1788,37 @@ private Color GetTextColor(
                     bounds.Y + 3);
             }
         }
-
         private void DrawSelection(
             Graphics g)
         {
-            if (_selectedElement == null)
+            if (_selectedElements.Count == 0)
                 return;
-
-            Rectangle bounds =
-                GetElementBounds(
-                    _selectedElement);
 
             const int ClientX = 20;
             const int ClientY = 20;
 
-            float zoom =
-                (float)_zoom;
-
-            /*
-             * Os elementos do Gump sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o desenhados dentro da
-             * mesma transformaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o utilizada pelo OnPaint():
-             *
-             *     Translate(ClientX, ClientY)
-             *     Scale(Zoom)
-             *
-             * A seleÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o precisa utilizar exatamente a mesma
-             * transformaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para ficar sobre o objeto.
-             */
-
-            GraphicsState state =
-                g.Save();
+            float zoom = (float)_zoom;
+            GraphicsState state = g.Save();
 
             try
             {
-                g.TranslateTransform(
-                    ClientX,
-                    ClientY);
+                g.TranslateTransform(ClientX, ClientY);
+                g.ScaleTransform(zoom, zoom);
 
-                g.ScaleTransform(
-                    zoom,
-                    zoom);
-
-                /*
-                 * Compensamos a espessura da linha pelo zoom.
-                 *
-                 * Assim a seleÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o continua visualmente com
-                 * aproximadamente 2 pixels na tela.
-                 */
-
-                using (
-                    var pen =
-                        new Pen(
-                            Color.Lime,
-                            2.0f / zoom))
+                for (int i = 0; i < _selectedElements.Count; i++)
                 {
-                    pen.DashStyle =
-                        DashStyle.Dash;
+                    GumpElement element = _selectedElements[i];
+                    if (element == null)
+                        continue;
 
-                    g.DrawRectangle(
-                        pen,
-                        bounds);
+                    Rectangle bounds = GetElementBounds(element);
+                    Color borderColor = i == 0 ? Color.Lime : Color.Gold;
+
+                    using (var pen = new Pen(borderColor, 2.0f / zoom))
+                    {
+                        pen.DashStyle = DashStyle.Dash;
+                        g.DrawRectangle(pen, bounds);
+                    }
                 }
             }
             finally
@@ -2058,138 +2068,133 @@ private Color GetTextColor(
 
             return true;
         }
-
-
         protected override void OnMouseDown(
             MouseEventArgs e)
         {
             base.OnMouseDown(e);
 
-            if (Document == null ||
-                e.Button != MouseButtons.Left)
-            {
+            if (Document == null || e.Button != MouseButtons.Left)
                 return;
-            }
 
-            Point point =
-                ScreenToDocument(
-                    e.Location);
+            Point point = ScreenToDocument(e.Location);
+            GumpElement element = FindElementAt(point);
 
-            GumpElement element =
-                FindElementAt(point);
-
-            // ====================================================
-            // MODO TESTE
-            // ====================================================
-            if (TestMode &&
-                element != null &&
-                element.Type ==
-                GumpElementType.Button)
+            if (TestMode && element != null && element.Type == GumpElementType.Button)
             {
-                TryExecuteTestButton(
-                    element);
-
+                TryExecuteTestButton(element);
+                _selectedElements.Clear();
                 _selectedElement = null;
+                _dragStartPositions.Clear();
                 _dragging = false;
                 Cursor = Cursors.Hand;
-
                 Invalidate();
                 return;
             }
 
-            _selectedElement =
-                element;
+            bool control = (ModifierKeys & Keys.Control) == Keys.Control;
 
-            SelectedElementChanged?.Invoke(
-                this,
-                EventArgs.Empty);
-
-            if (element != null)
+            if (element == null)
             {
-                _dragging = true;
+                if (!control)
+                {
+                    _selectedElements.Clear();
+                    _selectedElement = null;
+                }
 
-                _dragStart =
-                    point;
-
-                _elementStartX =
-                    element.X;
-
-                _elementStartY =
-                    element.Y;
-
-                Cursor =
-                    Cursors.SizeAll;
-            }
-            else
-            {
+                _dragStartPositions.Clear();
                 _dragging = false;
-
-                Cursor =
-                    Cursors.Default;
+                Cursor = Cursors.Default;
+                SelectedElementChanged?.Invoke(this, EventArgs.Empty);
+                Invalidate();
+                return;
             }
 
+            int existingIndex = _selectedElements.IndexOf(element);
+
+            if (control)
+            {
+                if (existingIndex >= 0)
+                    _selectedElements.RemoveAt(existingIndex);
+                else
+                    _selectedElements.Add(element);
+
+                _selectedElement = _selectedElements.Count > 0 ? _selectedElements[0] : null;
+                _dragStartPositions.Clear();
+                _dragging = false;
+                Cursor = Cursors.Default;
+                SelectedElementChanged?.Invoke(this, EventArgs.Empty);
+                Invalidate();
+                return;
+            }
+
+            if (existingIndex < 0)
+            {
+                _selectedElements.Clear();
+                _selectedElements.Add(element);
+            }
+
+            _selectedElement = _selectedElements.Count > 0 ? _selectedElements[0] : null;
+            _dragStart = point;
+            _dragStartPositions.Clear();
+
+            foreach (GumpElement selected in _selectedElements)
+            {
+                if (selected != null)
+                {
+                    _dragStartPositions[selected] = new Point(selected.X, selected.Y);
+                }
+            }
+
+            _dragging = _selectedElements.Count > 0;
+            Cursor = _dragging ? Cursors.SizeAll : Cursors.Default;
+            SelectedElementChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
-
         protected override void OnMouseMove(
             MouseEventArgs e)
         {
             base.OnMouseMove(e);
 
-            if (!_dragging ||
-                _selectedElement == null)
+            if (!_dragging || _selectedElements.Count == 0)
                 return;
 
-            Point point =
-                ScreenToDocument(
-                    e.Location);
+            Point point = ScreenToDocument(e.Location);
+            int dx = point.X - _dragStart.X;
+            int dy = point.Y - _dragStart.Y;
 
-            int dx =
-                point.X -
-                _dragStart.X;
+            int grid = Math.Max(1, GridSize);
+            GumpElement anchor = _selectedElement != null ? _selectedElement : _selectedElements[0];
 
-            int dy =
-                point.Y -
-                _dragStart.Y;
+            Point anchorStart;
+            if (!_dragStartPositions.TryGetValue(anchor, out anchorStart))
+                return;
 
-            int x =
-                _elementStartX +
-                dx;
+            int anchorX = anchorStart.X + dx;
+            int anchorY = anchorStart.Y + dy;
 
-            int y =
-                _elementStartY +
-                dy;
+            anchorX = (int)Math.Round(anchorX / (double)grid) * grid;
+            anchorY = (int)Math.Round(anchorY / (double)grid) * grid;
 
-            int grid =
-                Math.Max(
-                    1,
-                    GridSize);
+            int snappedDx = anchorX - anchorStart.X;
+            int snappedDy = anchorY - anchorStart.Y;
 
-            x =
-                (int)Math.Round(
-                    x /
-                    (double)grid) *
-                grid;
+            foreach (GumpElement selected in _selectedElements)
+            {
+                if (selected == null)
+                    continue;
 
-            y =
-                (int)Math.Round(
-                    y /
-                    (double)grid) *
-                grid;
+                Point start;
+                if (!_dragStartPositions.TryGetValue(selected, out start))
+                    continue;
 
-            _selectedElement.X =
-                x;
-
-            _selectedElement.Y =
-                y;
+                selected.X = start.X + snappedDx;
+                selected.Y = start.Y + snappedDy;
+            }
 
             if (Document != null)
                 Document.IsModified = true;
 
-            SelectedElementChanged?.Invoke(
-                this,
-                EventArgs.Empty);
-
+            SelectedElementChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
 
@@ -2336,33 +2341,36 @@ private Color GetTextColor(
                 width,
                 height);
         }
+        public Rectangle GetVisualBounds(
+            GumpElement element)
+        {
+            return GetElementBounds(element);
+        }
 
         public void SelectElement(
             GumpElement element)
         {
-            _selectedElement =
-                element;
+            _selectedElements.Clear();
+            _dragStartPositions.Clear();
 
+            if (element != null)
+                _selectedElements.Add(element);
+
+            _selectedElement = element;
             SelectedElementChanged?.Invoke(
                 this,
                 EventArgs.Empty);
-
             Invalidate();
         }
-
         public void ClearSelection()
         {
+            _selectedElements.Clear();
+            _dragStartPositions.Clear();
             _selectedElement = null;
-
             _dragging = false;
+            Cursor = Cursors.Default;
 
-            Cursor =
-                Cursors.Default;
-
-            SelectedElementChanged?.Invoke(
-                this,
-                EventArgs.Empty);
-
+            SelectedElementChanged?.Invoke(this, EventArgs.Empty);
             Invalidate();
         }
 
