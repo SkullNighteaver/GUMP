@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -23,15 +23,50 @@ namespace GumpEditor.Rendering
 
         private double _zoom = 1.0;
 
+        private int _viewportWidth = 800;
+        private int _viewportHeight = 600;
+
+        public int ViewportWidth
+        {
+            get
+            {
+                return _viewportWidth;
+            }
+            set
+            {
+                _viewportWidth =
+                    Math.Max(1, value);
+
+                Invalidate();
+            }
+        }
+
+        public int ViewportHeight
+        {
+            get
+            {
+                return _viewportHeight;
+            }
+            set
+            {
+                _viewportHeight =
+                    Math.Max(1, value);
+
+                Invalidate();
+            }
+        }
+
+        public bool TestMode { get; set; }
+
         // ============================================================
         // CLIPBOARD INTERNO DO EDITOR
         // ============================================================
         //
-        // Não usamos Clipboard do Windows para armazenar o objeto.
-        // Mantemos uma cópia completa do GumpElement.
+        // NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o usamos Clipboard do Windows para armazenar o objeto.
+        // Mantemos uma cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³pia completa do GumpElement.
         //
         // Isso permite copiar qualquer elemento do Gump sem perder
-        // propriedades específicas.
+        // propriedades especÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­ficas.
         // ============================================================
 
         private GumpElement _clipboardElement;
@@ -79,7 +114,7 @@ namespace GumpEditor.Rendering
         public int GridSize { get; set; } = 5;
 
         /// <summary>
-        /// Visualização final do Gump.
+        /// VisualizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o final do Gump.
         /// Quando ativa, remove elementos auxiliares
         /// do editor e mostra somente o resultado visual.
         /// </summary>
@@ -118,138 +153,175 @@ namespace GumpEditor.Rendering
 
         g.Clear(BackColor);
 
-        g.SmoothingMode = SmoothingMode.None;
-        g.InterpolationMode = InterpolationMode.NearestNeighbor;
-        g.PixelOffsetMode = PixelOffsetMode.Half;
-        g.CompositingMode = CompositingMode.SourceOver;
+        g.SmoothingMode =
+            SmoothingMode.None;
+
+        g.InterpolationMode =
+            InterpolationMode.NearestNeighbor;
+
+        g.PixelOffsetMode =
+            PixelOffsetMode.Half;
+
+        g.CompositingMode =
+            CompositingMode.SourceOver;
 
         if (Document == null)
             return;
 
-        const int ClientWidth = 800;
-        const int ClientHeight = 600;
+        int ClientWidth =
+            Math.Max(1, _viewportWidth);
+
+        int ClientHeight =
+            Math.Max(1, _viewportHeight);
 
         const int ClientX = 20;
         const int ClientY = 20;
 
-        float zoom = (float)_zoom;
+        float zoom =
+            (float)_zoom;
 
-        Rectangle clientRect = new Rectangle(
-            ClientX,
-            ClientY,
-            (int)(ClientWidth * zoom),
-            (int)(ClientHeight * zoom)
-        );
-
-        // ====================================================
-        // FUNDO DA ÁREA DO CLIENTE
-        // ====================================================
+        Rectangle clientRect =
+            new Rectangle(
+                ClientX,
+                ClientY,
+                (int)(ClientWidth * zoom),
+                (int)(ClientHeight * zoom));
 
         using (Brush clientBrush =
-            new SolidBrush(Color.FromArgb(25, 25, 28)))
+               new SolidBrush(
+                   Color.FromArgb(
+                       25,
+                       25,
+                       28)))
         {
-            g.FillRectangle(clientBrush, clientRect);
+            g.FillRectangle(
+                clientBrush,
+                clientRect);
         }
 
-        GraphicsState state = g.Save();
+        GraphicsState state =
+            g.Save();
 
-        g.TranslateTransform(ClientX, ClientY);
-        g.ScaleTransform(zoom, zoom);
+        g.TranslateTransform(
+            ClientX,
+            ClientY);
+
+        g.ScaleTransform(
+            zoom,
+            zoom);
 
         // ====================================================
-        // ÁREA REAL DO GUMP
+        // AREA REAL DO GUMP
         // ====================================================
-
         using (Brush gumpBrush =
-            new SolidBrush(Color.FromArgb(18, 18, 20)))
+               new SolidBrush(
+                   Color.FromArgb(
+                       18,
+                       18,
+                       20)))
         {
-            gumpBrush.GetType();
-
             g.FillRectangle(
                 gumpBrush,
                 0,
                 0,
                 Document.Width,
-                Document.Height
-            );
+                Document.Height);
         }
 
         if (ShowGrid)
             DrawGrid(g);
 
-        // ====================================================
-        // ELEMENTOS DO GUMP
-        // ====================================================
-
         if (Document.Elements != null)
         {
-            foreach (GumpElement element in Document.Elements)
+            foreach (GumpElement element
+                     in Document.Elements)
             {
                 if (element == null)
                     continue;
 
-                if (element.Type == GumpElementType.Page)
+                if (element.Type ==
+                    GumpElementType.Page)
+                {
                     continue;
+                }
 
-                // Página 0 = elemento global.
-                // Página atual = elemento específico.
                 if (element.Page != 0 &&
-                    element.Page != Document.CurrentPage)
+                    element.Page !=
+                    Document.CurrentPage)
+                {
                     continue;
+                }
 
-                DrawElement(g, element);
+                DrawElement(
+                    g,
+                    element);
             }
         }
         else
         {
             foreach (GumpElement element
-                in Document.GetElementsForPage(Document.CurrentPage))
+                     in Document.GetElementsForPage(
+                         Document.CurrentPage))
             {
                 if (element == null)
                     continue;
 
-                if (element.Type == GumpElementType.Page)
+                if (element.Type ==
+                    GumpElementType.Page)
+                {
                     continue;
+                }
 
-                DrawElement(g, element);
+                DrawElement(
+                    g,
+                    element);
             }
         }
 
         g.Restore(state);
 
-        // ====================================================
-        // SELEÇÃO
-        // ====================================================
-
         if (!ClientPreviewMode)
             DrawSelection(g);
 
-        // ====================================================
-        // BORDA DA TELA VIRTUAL
-        // ====================================================
-
         using (Pen borderPen =
-            new Pen(Color.FromArgb(90, 90, 95)))
+               new Pen(
+                   Color.FromArgb(
+                       90,
+                       90,
+                       95)))
         {
             g.DrawRectangle(
                 borderPen,
                 clientRect.X,
                 clientRect.Y,
                 clientRect.Width - 1,
-                clientRect.Height - 1
-            );
+                clientRect.Height - 1);
         }
     }
 
 
 
 
-private void DrawGrid(Graphics g)
+        private void DrawGrid(Graphics g)
         {
             int size =
                 Math.Max(
                     1,
                     GridSize);
+
+            int width =
+                Math.Max(
+                    Document != null
+                        ? Document.Width
+                        : 0,
+                    _viewportWidth);
+
+            int height =
+                Math.Max(
+                    Document != null
+                        ? Document.Height
+                        : 0,
+                    _viewportHeight);
 
             using (
                 var pen =
@@ -261,7 +333,7 @@ private void DrawGrid(Graphics g)
             {
                 for (
                     int x = 0;
-                    x <= Document.Width;
+                    x <= width;
                     x += size)
                 {
                     g.DrawLine(
@@ -269,19 +341,19 @@ private void DrawGrid(Graphics g)
                         x,
                         0,
                         x,
-                        Document.Height);
+                        height);
                 }
 
                 for (
                     int y = 0;
-                    y <= Document.Height;
+                    y <= height;
                     y += size)
                 {
                     g.DrawLine(
                         pen,
                         0,
                         y,
-                        Document.Width,
+                        width,
                         y);
                 }
             }
@@ -397,12 +469,12 @@ private void DrawGrid(Graphics g)
                     // parser. Reconhecemos pelo texto original.
 
                     /*
- * addbookbackground é um helper do script original e não
- * é um tipo visual do cliente.
+ * addbookbackground ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© um helper do script original e nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+ * ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© um tipo visual do cliente.
  *
  * O fundo real do livro chega ao parser como AddImage().
  *
- * Portanto não mostramos UNKNOWN no preview.
+ * Portanto nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o mostramos UNKNOWN no preview.
  */
 
                     break;
@@ -523,7 +595,7 @@ private void DrawGrid(Graphics g)
             int height = Math.Max(1, element.Height);
 
             /*
-             * AddBackground é composto por 9 artes:
+             * AddBackground ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© composto por 9 artes:
              *
              * 0 1 2
              * 3 4 5
@@ -558,7 +630,7 @@ private void DrawGrid(Graphics g)
             Bitmap bottomRight = parts[8];
 
             /*
-             * Obtém as dimensões diretamente das Bitmap.
+             * ObtÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m as dimensÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âµes diretamente das Bitmap.
              */
 
             int leftWidth = 0;
@@ -848,11 +920,11 @@ private void DrawGrid(Graphics g)
         }
 
         /// <summary>
-        /// Renderiza AddBookBackground como uma peça de fundo
+        /// Renderiza AddBookBackground como uma peÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a de fundo
         /// permanente do Gump.
         ///
-        /// O background de livro não deve desaparecer quando
-        /// mudamos de página.
+        /// O background de livro nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o deve desaparecer quando
+        /// mudamos de pÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gina.
         /// </summary>
         private void DrawBookBackground(
             Graphics g,
@@ -962,13 +1034,13 @@ private void DrawGrid(Graphics g)
              * Parameters[2] = HUE
              * Parameters[3] = TEXTO
              *
-             * Parameters[2] NUNCA é Font.
+             * Parameters[2] NUNCA ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© Font.
              *
-             * A fonte utilizada pelo editor está em:
+             * A fonte utilizada pelo editor estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ em:
              *
              * element.Font
              *
-             * A renderização é feita através dos glyphs reais
+             * A renderizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© feita atravÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©s dos glyphs reais
              * carregados de fonts.mul.
              * ============================================================
              */
@@ -1024,7 +1096,7 @@ private void DrawGrid(Graphics g)
             {
                 /*
                  * Nunca permitir que um problema de uma fonte
-                 * interrompa a renderização completa do Gump.
+                 * interrompa a renderizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o completa do Gump.
                  */
             }
         }
@@ -1045,27 +1117,27 @@ private void DrawGrid(Graphics g)
 
             /*
              * ========================================================
-             * RENDERIZAÇÃO DE TEXTO DO ULTIMA ONLINE
+             * RENDERIZAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DE TEXTO DO ULTIMA ONLINE
              * ========================================================
              *
-             * Não usamos System.Drawing.Font para texto do Gump.
+             * NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o usamos System.Drawing.Font para texto do Gump.
              *
              * O cliente do Ultima Online utiliza os arquivos de fonte
-             * do próprio cliente. Portanto, quando UoFontReader está
-             * disponível, o texto precisa passar pelo RenderText().
+             * do prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³prio cliente. Portanto, quando UoFontReader estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡
+             * disponÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­vel, o texto precisa passar pelo RenderText().
              *
              * Escala 1.0:
              *
-             * O tamanho real da fonte é preservado.
-             * O zoom do editor é aplicado posteriormente pelo Canvas.
+             * O tamanho real da fonte ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© preservado.
+             * O zoom do editor ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© aplicado posteriormente pelo Canvas.
              */
 
             if (UoFontReader == null)
             {
                 /*
-                 * Não usamos Graphics.DrawString() aqui.
+                 * NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o usamos Graphics.DrawString() aqui.
                  *
-                 * O fallback Windows altera completamente a aparência
+                 * O fallback Windows altera completamente a aparÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âªncia
                  * do texto do UO e foi uma das causas do texto ficar
                  * grande, grosso e desfocado.
                  */
@@ -1077,12 +1149,12 @@ private void DrawGrid(Graphics g)
 
             /*
              * ========================================================
-             * TRATAMENTO BÁSICO DO HTML
+             * TRATAMENTO BÃƒÆ’Ã†â€™Ãƒâ€šÃ‚ÂSICO DO HTML
              * ========================================================
              *
-             * AddHtml do UO pode conter comandos de formatação.
+             * AddHtml do UO pode conter comandos de formataÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o.
              *
-             * Nesta primeira etapa não tentamos reproduzir um navegador.
+             * Nesta primeira etapa nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o tentamos reproduzir um navegador.
              * Apenas transformamos as tags em algo que o renderer UO
              * consegue desenhar corretamente.
              */
@@ -1102,10 +1174,10 @@ private void DrawGrid(Graphics g)
                     System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
             /*
-             * Remove tags de formatação que não devem aparecer
+             * Remove tags de formataÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o que nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o devem aparecer
              * literalmente na tela.
              *
-             * A fonte real continuará sendo a fonte UO.
+             * A fonte real continuarÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ sendo a fonte UO.
              */
             sourceText =
                 System.Text.RegularExpressions.Regex.Replace(
@@ -1137,7 +1209,7 @@ private void DrawGrid(Graphics g)
                     "\n");
 
             /*
-             * Evita espaços artificiais causados pelo HTML.
+             * Evita espaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§os artificiais causados pelo HTML.
              */
             sourceText =
                 sourceText.Trim();
@@ -1169,12 +1241,12 @@ private void DrawGrid(Graphics g)
              * FONTE
              * ========================================================
              *
-             * AddHtml normalmente não carrega um fontId da mesma
+             * AddHtml normalmente nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o carrega um fontId da mesma
              * maneira que AddLabel.
              *
-             * Para HTML utilizamos Font 0 como fonte padrão do cliente.
+             * Para HTML utilizamos Font 0 como fonte padrÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o do cliente.
              *
-             * AddLabel continua usando a lógica própria já existente.
+             * AddLabel continua usando a lÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³gica prÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³pria jÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ existente.
              */
 
             int fontId = element.Font;
@@ -1197,13 +1269,13 @@ private void DrawGrid(Graphics g)
 
             /*
              * ========================================================
-             * RENDERIZAÇÃO DAS LINHAS
+             * RENDERIZAÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã‚Â¡ÃƒÆ’Ã†â€™Ãƒâ€ Ã¢â‚¬â„¢O DAS LINHAS
              * ========================================================
              *
              * RenderText() gera exatamente os pixels da fonte UO.
              *
-             * Não usamos DrawString().
-             * Não redimensionamos o bitmap.
+             * NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o usamos DrawString().
+             * NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o redimensionamos o bitmap.
              */
 
             string[] lines =
@@ -1241,7 +1313,7 @@ private void DrawGrid(Graphics g)
                 }
 
                 /*
-                 * Não desenhamos linhas vazias, mas avançamos
+                 * NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o desenhamos linhas vazias, mas avanÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§amos
                  * verticalmente como o cliente faria.
                  */
                 if (line.Length > 0)
@@ -1263,10 +1335,10 @@ private void DrawGrid(Graphics g)
                                 bounds.X;
 
                             /*
-                             * Centralização horizontal quando o
+                             * CentralizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o horizontal quando o
                              * elemento possui largura definida.
                              *
-                             * O tamanho da fonte não é alterado.
+                             * O tamanho da fonte nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© alterado.
                              */
                             if (bitmap.Width < bounds.Width)
                             {
@@ -1286,7 +1358,7 @@ private void DrawGrid(Graphics g)
                             }
 
                             /*
-                             * Não deixar o texto ultrapassar a área
+                             * NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o deixar o texto ultrapassar a ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡rea
                              * vertical do AddHtml.
                              */
                             if (currentY < bounds.Bottom &&
@@ -1317,7 +1389,7 @@ private void DrawGrid(Graphics g)
             }
 
             /*
-             * O retângulo abaixo é somente uma ferramenta do editor.
+             * O retÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢ngulo abaixo ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© somente uma ferramenta do editor.
              * Ele desaparece no ClientPreviewMode.
              */
             if (!ClientPreviewMode)
@@ -1359,10 +1431,10 @@ private int GetUoFontId(
     GumpElement element)
 {
     /*
-     * Primeiro tentamos encontrar uma informação explícita
-     * de fonte nos parâmetros.
+     * Primeiro tentamos encontrar uma informaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o explÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­cita
+     * de fonte nos parÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢metros.
      *
-     * Não interpretamos X/Y/Largura/Altura como fonte.
+     * NÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o interpretamos X/Y/Largura/Altura como fonte.
      */
 
     if (element != null &&
@@ -1385,14 +1457,14 @@ private int GetUoFontId(
                 parsed < 10)
             {
                 /*
-                 * Só utilizamos parâmetros isolados que representem
-                 * uma fonte UO válida.
+                 * SÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³ utilizamos parÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¢metros isolados que representem
+                 * uma fonte UO vÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡lida.
                  */
                 if (element.Type ==
                     GumpElementType.Label)
                 {
                     /*
-                     * Label normalmente não possui fontId explícito
+                     * Label normalmente nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o possui fontId explÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â­cito
                      * no comando. Mantemos Font 0.
                      */
                     continue;
@@ -1420,7 +1492,7 @@ private List<UoHtmlLine> ParseUoHtml(
     string text = html;
 
     /*
-     * Normalização de quebras de linha.
+     * NormalizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o de quebras de linha.
      */
 
     text = Regex.Replace(
@@ -1552,7 +1624,7 @@ private List<UoHtmlLine> ParseUoHtml(
         }
 
         /*
-         * Remove tags HTML sem destruir o conteúdo.
+         * Remove tags HTML sem destruir o conteÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Âºdo.
          */
 
         string plain =
@@ -1566,7 +1638,7 @@ private List<UoHtmlLine> ParseUoHtml(
                 plain);
 
         /*
-         * Remove caracteres de controle e espaços artificiais.
+         * Remove caracteres de controle e espaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§os artificiais.
          */
 
         plain =
@@ -1575,7 +1647,7 @@ private List<UoHtmlLine> ParseUoHtml(
                 "");
 
         /*
-         * Uma tag  vazia não gera linha.
+         * Uma tag  vazia nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o gera linha.
          */
 
         if (string.IsNullOrWhiteSpace(plain))
@@ -1695,14 +1767,14 @@ private Color GetTextColor(
                 (float)_zoom;
 
             /*
-             * Os elementos do Gump são desenhados dentro da
-             * mesma transformação utilizada pelo OnPaint():
+             * Os elementos do Gump sÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o desenhados dentro da
+             * mesma transformaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o utilizada pelo OnPaint():
              *
              *     Translate(ClientX, ClientY)
              *     Scale(Zoom)
              *
-             * A seleção precisa utilizar exatamente a mesma
-             * transformação para ficar sobre o objeto.
+             * A seleÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o precisa utilizar exatamente a mesma
+             * transformaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o para ficar sobre o objeto.
              */
 
             GraphicsState state =
@@ -1721,7 +1793,7 @@ private Color GetTextColor(
                 /*
                  * Compensamos a espessura da linha pelo zoom.
                  *
-                 * Assim a seleção continua visualmente com
+                 * Assim a seleÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o continua visualmente com
                  * aproximadamente 2 pixels na tela.
                  */
 
@@ -1814,20 +1886,20 @@ private Color GetTextColor(
                 return false;
 
             /*
-             * A cópia começa 10 pixels deslocada.
+             * A cÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â³pia comeÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§a 10 pixels deslocada.
              */
             element.X += 10;
             element.Y += 10;
 
             /*
-             * O elemento pertence à página atualmente selecionada.
+             * O elemento pertence ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â  pÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gina atualmente selecionada.
              */
             element.Page =
                 Document.CurrentPage;
 
             /*
-             * A linha de origem não representa mais uma posição
-             * confiável do arquivo original.
+             * A linha de origem nÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o representa mais uma posiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o
+             * confiÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡vel do arquivo original.
              */
             element.SourceLine = 0;
 
@@ -1847,7 +1919,7 @@ private Color GetTextColor(
         }
 
         // ============================================================
-        // CÓPIA PROFUNDA
+        // CÃƒÆ’Ã†â€™ÃƒÂ¢Ã¢â€šÂ¬Ã…â€œPIA PROFUNDA
         // ============================================================
 
         private static GumpElement CloneElement(
@@ -1900,6 +1972,94 @@ private Color GetTextColor(
             return clone;
         }
 
+        private bool TryExecuteTestButton(
+            GumpElement element)
+        {
+            if (!TestMode ||
+                element == null ||
+                element.Type !=
+                GumpElementType.Button)
+            {
+                return false;
+            }
+
+            string buttonType =
+                string.Empty;
+
+            string parameter =
+                "0";
+
+            if (element.Parameters != null &&
+                element.Parameters.Count > 5)
+            {
+                buttonType =
+                    element.Parameters[5] ??
+                    string.Empty;
+            }
+
+            if (element.Parameters != null &&
+                element.Parameters.Count > 6)
+            {
+                parameter =
+                    element.Parameters[6] ??
+                    "0";
+            }
+
+            if (buttonType.IndexOf(
+                    "GumpButtonType.Page",
+                    StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                int targetPage;
+
+                if (!int.TryParse(
+                        parameter,
+                        out targetPage))
+                {
+                    targetPage = 0;
+                }
+
+                if (targetPage > 0 &&
+                    Document != null)
+                {
+                    Document.CurrentPage =
+                        targetPage;
+
+                    SelectedElementChanged?.Invoke(
+                        this,
+                        EventArgs.Empty);
+
+                    Invalidate();
+
+                    return true;
+                }
+            }
+
+            if (buttonType.IndexOf(
+                    "GumpButtonType.Close",
+                    StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                TestMode = false;
+
+                System.Media.SystemSounds.Beep.Play();
+
+                Invalidate();
+
+                return true;
+            }
+
+            if (buttonType.IndexOf(
+                    "GumpButtonType.Reply",
+                    StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                System.Media.SystemSounds.Beep.Play();
+
+                return true;
+            }
+
+            return true;
+        }
+
+
         protected override void OnMouseDown(
             MouseEventArgs e)
         {
@@ -1907,15 +2067,35 @@ private Color GetTextColor(
 
             if (Document == null ||
                 e.Button != MouseButtons.Left)
+            {
                 return;
+            }
 
             Point point =
                 ScreenToDocument(
                     e.Location);
 
             GumpElement element =
-                FindElementAt(
-                    point);
+                FindElementAt(point);
+
+            // ====================================================
+            // MODO TESTE
+            // ====================================================
+            if (TestMode &&
+                element != null &&
+                element.Type ==
+                GumpElementType.Button)
+            {
+                TryExecuteTestButton(
+                    element);
+
+                _selectedElement = null;
+                _dragging = false;
+                Cursor = Cursors.Hand;
+
+                Invalidate();
+                return;
+            }
 
             _selectedElement =
                 element;
@@ -2058,8 +2238,8 @@ private Color GetTextColor(
                 if (element.Type == GumpElementType.Page)
                     continue;
 
-                // Página 0 é global.
-                // A página atual também deve ser considerada.
+                // PÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gina 0 ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© global.
+                // A pÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡gina atual tambÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©m deve ser considerada.
                 if (element.Page != 0 &&
                     element.Page != Document.CurrentPage)
                     continue;
@@ -2082,7 +2262,7 @@ private Color GetTextColor(
             }
         }
 
-        // Percorre de trás para frente para respeitar layering.
+        // Percorre de trÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡s para frente para respeitar layering.
         for (int i = elements.Count - 1; i >= 0; i--)
         {
             GumpElement element = elements[i];
