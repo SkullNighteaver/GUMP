@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -932,6 +932,9 @@ private void ApplyTextEditor(
     object sender,
     EventArgs e)
 {
+            // GUMPEDITOR_UNDO_BEFORE_ApplyTextEditor
+            SaveUndoSnapshot();
+
     if (_canvas.SelectedElement == null ||
         _textEditor == null)
         return;
@@ -996,6 +999,448 @@ private void SetElementParameter(
     element.Parameters[index] =
         value;
 }
+        // ========================================================
+        // GUMPEDITOR_AUTOSIZE_FINAL_20260906
+        // ========================================================
+
+        private void AutoSizeSelectedElement()
+        {
+            if (_canvas == null ||
+                _canvas.SelectedElement == null)
+                return;
+
+            GumpElement element =
+                _canvas.SelectedElement;
+
+            // ----------------------------------------------------
+            // ARTE REAL DO GUMP
+            // ----------------------------------------------------
+
+            if (_gumpArtReader != null &&
+                element.ArtId > 0)
+            {
+                try
+                {
+                    Bitmap bitmap =
+                        _gumpArtReader.GetGump(
+                            element.ArtId);
+
+                    if (bitmap != null)
+                    {
+                        bool isArt =
+                            element.Type ==
+                                GumpElementType.Image ||
+                            element.Type ==
+                                GumpElementType.Button ||
+                            element.Type ==
+                                GumpElementType.Checkbox ||
+                            element.Type ==
+                                GumpElementType.Radio ||
+                            element.Type ==
+                                GumpElementType.Item;
+
+                        if (isArt)
+                        {
+                            element.Width =
+                                bitmap.Width;
+
+                            element.Height =
+                                bitmap.Height;
+                        }
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            // ----------------------------------------------------
+            // TEXTO REAL DO FONTS.MUL
+            // ----------------------------------------------------
+
+            bool isText =
+                element.Type ==
+                    GumpElementType.Label ||
+                element.Type ==
+                    GumpElementType.LabelCropped ||
+                element.Type ==
+                    GumpElementType.Html;
+
+            if (isText &&
+                _uoFontReader != null &&
+                _uoFontReader.Fonts != null)
+            {
+                try
+                {
+                    int fontId =
+                        element.Font;
+
+                    if (fontId < 0 ||
+                        fontId >= _uoFontReader.Fonts.Count)
+                    {
+                        fontId = 0;
+                    }
+
+                    string text =
+                        element.Text ??
+                        string.Empty;
+
+                    if (element.Type ==
+                        GumpElementType.Html)
+                    {
+                        text =
+                            System.Text.RegularExpressions.Regex.Replace(
+                                text,
+                                "<[^>]*>",
+                                string.Empty);
+
+                        text =
+                            System.Net.WebUtility.HtmlDecode(
+                                text);
+                    }
+
+                    string[] lines =
+                        text.Replace(
+                                "\r\n",
+                                "\n")
+                            .Replace(
+                                "\r",
+                                "\n")
+                            .Split(
+                                new[] { '\n' });
+
+                    int maxWidth = 1;
+                    int totalHeight = 0;
+
+                    foreach (string line in lines)
+                    {
+                        using (Bitmap bitmap =
+                               _uoFontReader.RenderText(
+                                   fontId,
+                                   string.IsNullOrEmpty(line)
+                                       ? " "
+                                       : line,
+                                   Color.White,
+                                   1.0f))
+                        {
+                            if (bitmap != null)
+                            {
+                                maxWidth =
+                                    Math.Max(
+                                        maxWidth,
+                                        bitmap.Width);
+
+                                totalHeight +=
+                                    bitmap.Height;
+                            }
+                        }
+                    }
+
+                    element.Width =
+                        Math.Max(
+                            1,
+                            maxWidth);
+
+                    element.Height =
+                        Math.Max(
+                            1,
+                            totalHeight);
+                }
+                catch
+                {
+                }
+            }
+
+            // Atualiza os campos visuais sem criar alteração
+            // manual adicional no documento.
+
+            if (_width != null)
+            {
+                decimal value =
+                    Math.Max(
+                        _width.Minimum,
+                        Math.Min(
+                            _width.Maximum,
+                            element.Width));
+
+                _width.Value =
+                    value;
+            }
+
+            if (_height != null)
+            {
+                decimal value =
+                    Math.Max(
+                        _height.Minimum,
+                        Math.Min(
+                            _height.Maximum,
+                            element.Height));
+
+                _height.Value =
+                    value;
+            }
+
+            if (_canvas != null)
+                _canvas.RefreshCanvas();
+        }
+
+        // ========================================================
+        // GUMPEDITOR_UNDO_FINAL_20260906
+        // ========================================================
+
+        private sealed class GumpUndoSnapshot
+        {
+            public int Width;
+            public int Height;
+            public int CurrentPage;
+            public List<GumpElement> Elements =
+                new List<GumpElement>();
+        }
+
+        private readonly Stack<GumpUndoSnapshot> _gumpUndo =
+            new Stack<GumpUndoSnapshot>();
+
+        private bool _restoringUndo;
+
+        private void SaveUndoSnapshot()
+        {
+            if (_restoringUndo)
+                return;
+
+            if (_canvas == null ||
+                _canvas.Document == null)
+                return;
+
+            var document =
+                _canvas.Document;
+
+            var snapshot =
+                new GumpUndoSnapshot();
+
+            snapshot.Width =
+                document.Width;
+
+            snapshot.Height =
+                document.Height;
+
+            snapshot.CurrentPage =
+                document.CurrentPage;
+
+            foreach (GumpElement source in document.Elements)
+            {
+                var copy =
+                    new GumpElement();
+
+                copy.Type =
+                    source.Type;
+
+                copy.CommandName =
+                    source.CommandName;
+
+                copy.X =
+                    source.X;
+
+                copy.Y =
+                    source.Y;
+
+                copy.Width =
+                    source.Width;
+
+                copy.Height =
+                    source.Height;
+
+                copy.Hue =
+                    source.Hue;
+
+                copy.Text =
+                    source.Text;
+
+                copy.ArtId =
+                    source.ArtId;
+
+                copy.ButtonId =
+                    source.ButtonId;
+
+                copy.Page =
+                    source.Page;
+
+                copy.SourceLine =
+                    source.SourceLine;
+
+                copy.SourceCode =
+                    source.SourceCode;
+
+                copy.Font =
+                    source.Font;
+
+                copy.TextSize =
+                    source.TextSize;
+
+                copy.TextAlign =
+                    source.TextAlign;
+
+                copy.Bold =
+                    source.Bold;
+
+                copy.Italic =
+                    source.Italic;
+
+                copy.Underline =
+                    source.Underline;
+
+                foreach (string parameter in source.Parameters)
+                {
+                    copy.Parameters.Add(parameter);
+                }
+
+                snapshot.Elements.Add(copy);
+            }
+
+            _gumpUndo.Push(snapshot);
+
+            while (_gumpUndo.Count > 100)
+            {
+                var temp =
+                    _gumpUndo.ToArray();
+
+                _gumpUndo.Clear();
+
+                for (int i = 0;
+                     i < temp.Length - 1;
+                     i++)
+                {
+                    _gumpUndo.Push(temp[i]);
+                }
+            }
+        }
+
+        private void UndoLastChange()
+        {
+            if (_restoringUndo)
+                return;
+
+            if (_gumpUndo.Count == 0)
+            {
+                System.Media.SystemSounds.Beep.Play();
+                return;
+            }
+
+            if (_canvas == null ||
+                _canvas.Document == null)
+                return;
+
+            var snapshot =
+                _gumpUndo.Pop();
+
+            _restoringUndo = true;
+
+            try
+            {
+                var document =
+                    _canvas.Document;
+
+                document.Width =
+                    snapshot.Width;
+
+                document.Height =
+                    snapshot.Height;
+
+                document.CurrentPage =
+                    snapshot.CurrentPage;
+
+                document.Elements.Clear();
+
+                foreach (GumpElement source in snapshot.Elements)
+                {
+                    var copy =
+                        new GumpElement();
+
+                    copy.Type =
+                        source.Type;
+
+                    copy.CommandName =
+                        source.CommandName;
+
+                    copy.X =
+                        source.X;
+
+                    copy.Y =
+                        source.Y;
+
+                    copy.Width =
+                        source.Width;
+
+                    copy.Height =
+                        source.Height;
+
+                    copy.Hue =
+                        source.Hue;
+
+                    copy.Text =
+                        source.Text;
+
+                    copy.ArtId =
+                        source.ArtId;
+
+                    copy.ButtonId =
+                        source.ButtonId;
+
+                    copy.Page =
+                        source.Page;
+
+                    copy.SourceLine =
+                        source.SourceLine;
+
+                    copy.SourceCode =
+                        source.SourceCode;
+
+                    copy.Font =
+                        source.Font;
+
+                    copy.TextSize =
+                        source.TextSize;
+
+                    copy.TextAlign =
+                        source.TextAlign;
+
+                    copy.Bold =
+                        source.Bold;
+
+                    copy.Italic =
+                        source.Italic;
+
+                    copy.Underline =
+                        source.Underline;
+
+                    foreach (string parameter in source.Parameters)
+                    {
+                        copy.Parameters.Add(parameter);
+                    }
+
+                    document.Elements.Add(copy);
+                }
+
+                document.IsModified =
+                    true;
+
+                _canvas.ClearSelection();
+
+                PopulatePages();
+
+                PopulateElements();
+
+                UpdateProperties();
+
+                UpdateStatus();
+
+                _canvas.RefreshCanvas();
+            }
+            finally
+            {
+                _restoringUndo = false;
+            }
+        }
+
 
 
     private void InitializeGumpArt()
@@ -2179,6 +2624,13 @@ private void InitializeMenu()
             ref Message msg,
             Keys keyData)
         {
+            // GUMPEDITOR_UNDO_KEY_FINAL
+            if (keyData == (Keys.Control | Keys.Z))
+            {
+                UndoLastChange();
+                return true;
+            }
+
             /*
              * Não interceptar os atalhos normais quando o usuário
              * estiver digitando em um campo de texto.
@@ -2592,6 +3044,9 @@ private void InitializeMenu()
             object sender,
             EventArgs e)
         {
+            // GUMPEDITOR_UNDO_BEFORE_DeleteElement
+            SaveUndoSnapshot();
+
             var element =
                 _canvas.SelectedElement;
 
@@ -2677,6 +3132,9 @@ private void InitializeMenu()
             object sender,
             EventArgs e)
         {
+            // GUMPEDITOR_UNDO_BEFORE_ApplyProperties
+            SaveUndoSnapshot();
+
             var element =
                 _canvas.SelectedElement;
 
@@ -2738,6 +3196,9 @@ private void InitializeMenu()
 
         private void UpdateProperties()
         {
+            // GUMPEDITOR_AUTOSIZE_CALL_FINAL
+            AutoSizeSelectedElement();
+
             var element =
                 _canvas.SelectedElement;
 try
@@ -3213,10 +3674,10 @@ try
     _gumpTextEditor = new RichTextBox
     {
         Dock = DockStyle.Top,
-        Height = 82,
+        Height = 180,
         Multiline = true,
-        ScrollBars = RichTextBoxScrollBars.Vertical
-    };
+        ScrollBars = RichTextBoxScrollBars.Both,WordWrap = false,
+        AcceptsTab = true,};
 
     _gumpFontInfo = new Label
     {
@@ -3767,6 +4228,9 @@ private void LoadSelectedElementIntoTextEditor()
 
         private void ApplyVisualTextEditor()
 {
+            // GUMPEDITOR_UNDO_BEFORE_ApplyVisualTextEditor
+            SaveUndoSnapshot();
+
     if (_canvas == null ||
         _canvas.SelectedElement == null ||
         _gumpTextEditor == null)

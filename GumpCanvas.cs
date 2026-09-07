@@ -1,4 +1,4 @@
-using System.Text.RegularExpressions;
+﻿using System.Text.RegularExpressions;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -23,6 +23,18 @@ namespace GumpEditor.Rendering
 
         private double _zoom = 1.0;
 
+        // ============================================================
+        // CLIPBOARD INTERNO DO EDITOR
+        // ============================================================
+        //
+        // Não usamos Clipboard do Windows para armazenar o objeto.
+        // Mantemos uma cópia completa do GumpElement.
+        //
+        // Isso permite copiar qualquer elemento do Gump sem perder
+        // propriedades específicas.
+        // ============================================================
+
+        private GumpElement _clipboardElement;
         private readonly Dictionary<string, Bitmap> _gumpArtCache =
             new Dictionary<string, Bitmap>();
 
@@ -931,73 +943,91 @@ private void DrawGrid(Graphics g)
         }
 
         private void DrawLabel(
-    Graphics g,
-    GumpElement element)
-{
-    Color color =
-        GetTextColor(
-            element.Hue);
-
-    /*
-     * Preferimos a fonte real do Ultima Online.
-     */
-
-    if (UoFontReader != null)
-    {
-        try
+            Graphics g,
+            GumpElement element)
         {
-            int fontId = element.Font;
+            /*
+             * ============================================================
+             * FONTE REAL DO ULTIMA ONLINE
+             * ============================================================
+             *
+             * AddLabel possui:
+             *
+             * AddLabel(x, y, hue, text)
+             *
+             * Portanto:
+             *
+             * Parameters[0] = X
+             * Parameters[1] = Y
+             * Parameters[2] = HUE
+             * Parameters[3] = TEXTO
+             *
+             * Parameters[2] NUNCA é Font.
+             *
+             * A fonte utilizada pelo editor está em:
+             *
+             * element.Font
+             *
+             * A renderização é feita através dos glyphs reais
+             * carregados de fonts.mul.
+             * ============================================================
+             */
 
-            if (element.Parameters != null &&
-                element.Parameters.Count > 2)
+            Color color =
+                GetTextColor(element.Hue);
+
+            if (UoFontReader == null)
             {
-                int.TryParse(
-                    element.Parameters[2],
-                    out fontId);
+                return;
             }
 
-            if (fontId >= 0 &&
-                fontId < UoFontReader.Fonts.Count)
+            try
             {
+                int fontId = element.Font;
+
+                /*
+                 * O cliente UO possui as fontes 0..9.
+                 */
+                if (fontId < 0 ||
+                    fontId >= UoFontReader.Fonts.Count)
+                {
+                    fontId = 0;
+                }
+
+                string text =
+                    element.Text ?? string.Empty;
+
                 Bitmap bitmap =
                     UoFontReader.RenderText(
                         fontId,
-                        element.Text ?? "",
+                        text,
                         color,
                         1.0f);
 
-                if (bitmap != null)
+                if (bitmap == null)
                 {
-                    g.DrawImageUnscaled(
-                        bitmap,
-                        element.X,
-                        element.Y);
-
-                    bitmap.Dispose();
-
                     return;
                 }
+
+                /*
+                 * O AddLabel trabalha com a origem X/Y
+                 * diretamente no Canvas.
+                 */
+                g.DrawImageUnscaled(
+                    bitmap,
+                    element.X,
+                    element.Y);
+
+                bitmap.Dispose();
+            }
+            catch
+            {
+                /*
+                 * Nunca permitir que um problema de uma fonte
+                 * interrompa a renderização completa do Gump.
+                 */
             }
         }
-        catch
-        {
-            /*
-             * Se a fonte UO nao puder ser renderizada,
-             * usamos o fallback abaixo.
-             */
-        }
-    }
-
-    /*
-     * O texto do Gump deve usar exclusivamente a fonte grafica
-     * do Ultima Online.
-     *
-     * Nao usamos Graphics.DrawString() aqui porque isso utiliza
-     * uma fonte instalada no Windows e altera a aparencia original
-     * do cliente.
-     */
-    return;
-}
         private void DrawText(
             Graphics g,
             GumpElement element)
@@ -1713,6 +1743,161 @@ private Color GetTextColor(
             {
                 g.Restore(state);
             }
+        }
+
+        // ============================================================
+        // COPIAR ELEMENTO
+        // ============================================================
+
+        public bool CopySelectedElement()
+        {
+            if (_selectedElement == null)
+                return false;
+
+            _clipboardElement =
+                CloneElement(_selectedElement);
+
+            return _clipboardElement != null;
+        }
+
+        // ============================================================
+        // RECORTAR ELEMENTO
+        // ============================================================
+
+        public bool CutSelectedElement()
+        {
+            if (_selectedElement == null ||
+                Document == null)
+            {
+                return false;
+            }
+
+            _clipboardElement =
+                CloneElement(_selectedElement);
+
+            if (_clipboardElement == null)
+                return false;
+
+            Document.RemoveElement(
+                _selectedElement);
+
+            _selectedElement = null;
+
+            if (Document != null)
+                Document.IsModified = true;
+
+            SelectedElementChanged?.Invoke(
+                this,
+                EventArgs.Empty);
+
+            Invalidate();
+
+            return true;
+        }
+
+        // ============================================================
+        // COLAR ELEMENTO
+        // ============================================================
+
+        public bool PasteElement()
+        {
+            if (_clipboardElement == null ||
+                Document == null)
+            {
+                return false;
+            }
+
+            GumpElement element =
+                CloneElement(_clipboardElement);
+
+            if (element == null)
+                return false;
+
+            /*
+             * A cópia começa 10 pixels deslocada.
+             */
+            element.X += 10;
+            element.Y += 10;
+
+            /*
+             * O elemento pertence à página atualmente selecionada.
+             */
+            element.Page =
+                Document.CurrentPage;
+
+            /*
+             * A linha de origem não representa mais uma posição
+             * confiável do arquivo original.
+             */
+            element.SourceLine = 0;
+
+            Document.AddElement(element);
+
+            Document.IsModified = true;
+
+            _selectedElement = element;
+
+            SelectedElementChanged?.Invoke(
+                this,
+                EventArgs.Empty);
+
+            Invalidate();
+
+            return true;
+        }
+
+        // ============================================================
+        // CÓPIA PROFUNDA
+        // ============================================================
+
+        private static GumpElement CloneElement(
+            GumpElement source)
+        {
+            if (source == null)
+                return null;
+
+            var clone = new GumpElement
+            {
+                Type = source.Type,
+                CommandName = source.CommandName ?? string.Empty,
+
+                X = source.X,
+                Y = source.Y,
+
+                Width = source.Width,
+                Height = source.Height,
+
+                Hue = source.Hue,
+
+                Text = source.Text ?? string.Empty,
+
+                ArtId = source.ArtId,
+                ButtonId = source.ButtonId,
+
+                Page = source.Page,
+
+                SourceLine = source.SourceLine,
+                SourceCode = source.SourceCode ?? string.Empty,
+
+                Font = source.Font,
+                TextSize = source.TextSize,
+                TextAlign = source.TextAlign,
+
+                Bold = source.Bold,
+                Italic = source.Italic,
+                Underline = source.Underline
+            };
+
+            if (source.Parameters != null)
+            {
+                foreach (string parameter in source.Parameters)
+                {
+                    clone.Parameters.Add(
+                        parameter ?? string.Empty);
+                }
+            }
+
+            return clone;
         }
 
         protected override void OnMouseDown(
