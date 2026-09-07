@@ -2221,6 +2221,17 @@ private void InitializeMenu()
 
             BuildHuesTab(
                 huesTab);
+            var alignmentTab =
+                new TabPage("Alinhamento");
+
+            alignmentTab.BackColor =
+                lightBack;
+
+            BuildAlignmentTab(
+                alignmentTab);
+
+            tabs.TabPages.Add(
+                alignmentTab);
 
             tabs.TabPages.Add(
                 propertiesTab);
@@ -2236,6 +2247,274 @@ private void InitializeMenu()
 
             _propertiesPanel.Controls.Add(
                 tabs);
+        }
+        private void BuildAlignmentTab(
+            TabPage tab)
+        {
+            var panel = new Panel
+            {
+                Dock = DockStyle.Fill,
+                Padding = new Padding(10),
+                BackColor = Color.Gainsboro
+            };
+
+            var info = new Label
+            {
+                Dock = DockStyle.Top,
+                Height = 48,
+                Text = "Selecione vários objetos com Ctrl+clique.\\r\\n" +
+                       "Use os botões abaixo para alinhar ou distribuir.",
+                TextAlign = ContentAlignment.MiddleLeft
+            };
+
+            var flow = new FlowLayoutPanel
+            {
+                Dock = DockStyle.Fill,
+                AutoScroll = true,
+                WrapContents = true,
+                FlowDirection = FlowDirection.LeftToRight,
+                Padding = new Padding(0, 8, 0, 0)
+            };
+
+            Button Button(string text, EventHandler click)
+            {
+                var b = new Button
+                {
+                    Text = text,
+                    Width = 135,
+                    Height = 34,
+                    Margin = new Padding(3)
+                };
+                b.Click += click;
+                return b;
+            }
+
+            flow.Controls.Add(Button("Esquerda", delegate { AlignSelected(AlignmentAction.Left); }));
+            flow.Controls.Add(Button("Centro", delegate { AlignSelected(AlignmentAction.Center); }));
+            flow.Controls.Add(Button("Direita", delegate { AlignSelected(AlignmentAction.Right); }));
+            flow.Controls.Add(Button("Topo", delegate { AlignSelected(AlignmentAction.Top); }));
+            flow.Controls.Add(Button("Meio", delegate { AlignSelected(AlignmentAction.Middle); }));
+            flow.Controls.Add(Button("Base", delegate { AlignSelected(AlignmentAction.Bottom); }));
+            flow.Controls.Add(Button("Centralizar Horizontal", delegate { AlignSelected(AlignmentAction.CenterHorizontalGump); }));
+            flow.Controls.Add(Button("Centralizar Vertical", delegate { AlignSelected(AlignmentAction.CenterVerticalGump); }));
+            flow.Controls.Add(Button("Centralizar no Gump", delegate { AlignSelected(AlignmentAction.CenterGump); }));
+            flow.Controls.Add(Button("Distribuir Horizontal", delegate { AlignSelected(AlignmentAction.DistributeHorizontal); }));
+            flow.Controls.Add(Button("Distribuir Vertical", delegate { AlignSelected(AlignmentAction.DistributeVertical); }));
+            flow.Controls.Add(Button("Limpar Seleção", delegate { if (_canvas != null) _canvas.ClearSelection(); }));
+
+            panel.Controls.Add(flow);
+            panel.Controls.Add(info);
+            tab.Controls.Add(panel);
+        }
+
+        private enum AlignmentAction
+        {
+            Left,
+            Center,
+            Right,
+            Top,
+            Middle,
+            Bottom,
+            CenterHorizontalGump,
+            CenterVerticalGump,
+            CenterGump,
+            DistributeHorizontal,
+            DistributeVertical
+        }
+
+        private List<GumpElement> GetSelectedAlignmentElements()
+        {
+            var result = new List<GumpElement>();
+            if (_canvas == null || _canvas.SelectedElements == null)
+                return result;
+
+            foreach (GumpElement element in _canvas.SelectedElements)
+            {
+                if (element != null && element.Type != GumpElementType.Page)
+                    result.Add(element);
+            }
+
+            return result;
+        }
+
+        private Rectangle GetAlignmentBounds(GumpElement element)
+        {
+            if (_canvas == null || element == null)
+                return Rectangle.Empty;
+
+            return _canvas.GetVisualBounds(element);
+        }
+
+        private void AlignSelected(AlignmentAction action)
+        {
+            List<GumpElement> items = GetSelectedAlignmentElements();
+            if (items.Count == 0)
+            {
+                MessageBox.Show(this, "Selecione pelo menos um objeto.", "Alinhamento", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if ((action == AlignmentAction.DistributeHorizontal ||
+                 action == AlignmentAction.DistributeVertical) && items.Count < 3)
+            {
+                MessageBox.Show(this, "Distribuição exige pelo menos 3 objetos.", "Alinhamento", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            if (_canvas == null || _canvas.Document == null)
+                return;
+
+            SaveUndoSnapshot();
+            bool changed = false;
+
+            switch (action)
+            {
+                case AlignmentAction.Left:
+                    {
+                        int x = int.MaxValue;
+                        foreach (var item in items) x = Math.Min(x, GetAlignmentBounds(item).Left);
+                        foreach (var item in items) { Rectangle b = GetAlignmentBounds(item); int dx = x - b.Left; if (dx != 0) { item.X += dx; changed = true; } }
+                        break;
+                    }
+                case AlignmentAction.Center:
+                    {
+                        Rectangle first = GetAlignmentBounds(items[0]);
+                        int center = first.Left + first.Width / 2;
+                        foreach (var item in items) { Rectangle b = GetAlignmentBounds(item); int target = center - b.Width / 2; if (item.X != target) { item.X = target; changed = true; } }
+                        break;
+                    }
+                case AlignmentAction.Right:
+                    {
+                        int right = int.MinValue;
+                        foreach (var item in items) right = Math.Max(right, GetAlignmentBounds(item).Right);
+                        foreach (var item in items) { Rectangle b = GetAlignmentBounds(item); int target = right - b.Width; if (item.X != target) { item.X = target; changed = true; } }
+                        break;
+                    }
+                case AlignmentAction.Top:
+                    {
+                        int y = int.MaxValue;
+                        foreach (var item in items) y = Math.Min(y, GetAlignmentBounds(item).Top);
+                        foreach (var item in items) { Rectangle b = GetAlignmentBounds(item); int dy = y - b.Top; if (dy != 0) { item.Y += dy; changed = true; } }
+                        break;
+                    }
+                case AlignmentAction.Middle:
+                    {
+                        Rectangle first = GetAlignmentBounds(items[0]);
+                        int center = first.Top + first.Height / 2;
+                        foreach (var item in items) { Rectangle b = GetAlignmentBounds(item); int target = center - b.Height / 2; if (item.Y != target) { item.Y = target; changed = true; } }
+                        break;
+                    }
+                case AlignmentAction.Bottom:
+                    {
+                        int bottom = int.MinValue;
+                        foreach (var item in items) bottom = Math.Max(bottom, GetAlignmentBounds(item).Bottom);
+                        foreach (var item in items) { Rectangle b = GetAlignmentBounds(item); int target = bottom - b.Height; if (item.Y != target) { item.Y = target; changed = true; } }
+                        break;
+                    }
+                case AlignmentAction.CenterHorizontalGump:
+                    {
+                        int center = _canvas.Document.Width / 2;
+                        foreach (var item in items) { Rectangle b = GetAlignmentBounds(item); int target = center - b.Width / 2; if (item.X != target) { item.X = target; changed = true; } }
+                        break;
+                    }
+                case AlignmentAction.CenterVerticalGump:
+                    {
+                        int center = _canvas.Document.Height / 2;
+                        foreach (var item in items) { Rectangle b = GetAlignmentBounds(item); int target = center - b.Height / 2; if (item.Y != target) { item.Y = target; changed = true; } }
+                        break;
+                    }
+                case AlignmentAction.CenterGump:
+                    {
+                        int cx = _canvas.Document.Width / 2;
+                        int cy = _canvas.Document.Height / 2;
+                        foreach (var item in items)
+                        {
+                            Rectangle b = GetAlignmentBounds(item);
+                            int x = cx - b.Width / 2;
+                            int y = cy - b.Height / 2;
+                            if (item.X != x) { item.X = x; changed = true; }
+                            if (item.Y != y) { item.Y = y; changed = true; }
+                        }
+                        break;
+                    }
+                case AlignmentAction.DistributeHorizontal:
+                    changed = DistributeSelected(items, true);
+                    break;
+                case AlignmentAction.DistributeVertical:
+                    changed = DistributeSelected(items, false);
+                    break;
+            }
+
+            if (!changed)
+                return;
+
+            _canvas.Document.IsModified = true;
+            PopulateElements();
+            UpdateProperties();
+            UpdateStatus();
+            _canvas.Invalidate();
+        }
+
+        private bool DistributeSelected(List<GumpElement> items, bool horizontal)
+        {
+            var ordered = new List<GumpElement>(items);
+            ordered.Sort(delegate(GumpElement a, GumpElement b)
+            {
+                Rectangle ra = GetAlignmentBounds(a);
+                Rectangle rb = GetAlignmentBounds(b);
+                int va = horizontal ? ra.Left : ra.Top;
+                int vb = horizontal ? rb.Left : rb.Top;
+                return va.CompareTo(vb);
+            });
+
+            Rectangle first = GetAlignmentBounds(ordered[0]);
+            Rectangle last = GetAlignmentBounds(ordered[ordered.Count - 1]);
+            int start = horizontal ? first.Left : first.Top;
+            int end = horizontal ? last.Right : last.Bottom;
+            int totalSize = 0;
+
+            foreach (GumpElement item in ordered)
+            {
+                Rectangle b = GetAlignmentBounds(item);
+                totalSize += horizontal ? b.Width : b.Height;
+            }
+
+            int span = end - start;
+            int free = span - totalSize;
+            if (free < 0)
+            {
+                MessageBox.Show(this, "Os objetos se sobrepõem; não é possível distribuí-los sem reduzir o espaço.", "Alinhamento", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return false;
+            }
+
+            int gapCount = ordered.Count - 1;
+            int baseGap = free / gapCount;
+            int remainder = free % gapCount;
+            int cursor = start;
+            bool changed = false;
+
+            for (int i = 0; i < ordered.Count; i++)
+            {
+                GumpElement item = ordered[i];
+                Rectangle b = GetAlignmentBounds(item);
+                int target = cursor;
+
+                if (horizontal)
+                {
+                    if (item.X != target) { item.X = target; changed = true; }
+                    cursor = target + b.Width;
+                }
+                else
+                {
+                    if (item.Y != target) { item.Y = target; changed = true; }
+                    cursor = target + b.Height;
+                }
+
+                if (i < gapCount)
+                    cursor += baseGap + (i < remainder ? 1 : 0);
+            }
+
+            return changed;
         }
         private void AddNewGumpPage(
             object sender,
