@@ -343,18 +343,6 @@ _canvas.SelectedElementChanged += CanvasTextEditorSelectionChanged;
             htmlContainer.Controls.Add(
                 _gumpTextEditorPanel);
         }
-
-        if (_textEditorGroup != null)
-        {
-            _textEditorGroup.Dock =
-                DockStyle.Top;
-
-            _textEditorGroup.Height =
-                430;
-
-            htmlContainer.Controls.Add(
-                _textEditorGroup);
-        }
     }
 
         private void InitializeTextEditor()
@@ -689,43 +677,7 @@ _canvas.SelectedElementChanged += CanvasTextEditorSelectionChanged;
         /*
          * O editor pertence somente Ã  aba Propriedades.
          */
-        TabControl propertiesTabs = null;
-
-        foreach (Control control in _propertiesPanel.Controls)
-        {
-            propertiesTabs =
-                control as TabControl;
-
-            if (propertiesTabs != null)
-                break;
-        }
-
-        if (propertiesTabs == null)
-            return;
-
-        TabPage propertiesTab = null;
-
-        foreach (TabPage page in propertiesTabs.TabPages)
-        {
-            if (string.Equals(
-                page.Text,
-                "Propriedades",
-                StringComparison.OrdinalIgnoreCase))
-            {
-                propertiesTab = page;
-                break;
-            }
-        }
-
-        if (propertiesTab == null)
-            return;
-
-        propertiesTab.Controls.Add(
-            _textEditorGroup);
-
-        _textEditorGroup.BringToFront();
-
-    UpdateTextFontPreview();
+        UpdateTextFontPreview();
 }
 
         private void ApplyLightTheme()
@@ -2298,7 +2250,9 @@ private void InitializeMenu()
             var artTab =
                 new TabPage("Artes");
 
-            var huesTab =
+            var alignmentTab =
+                new TabPage("Alinhamento");
+var huesTab =
                 new TabPage("Hues");
 
             Color lightBack =
@@ -2325,7 +2279,10 @@ private void InitializeMenu()
             BuildArtTab(
                 artTab);
 
-            BuildHuesTab(
+            
+            BuildAlignmentTab(
+                alignmentTab);
+BuildHuesTab(
                 huesTab);
 tabs.TabPages.Add(
                 propertiesTab);
@@ -2338,6 +2295,8 @@ tabs.TabPages.Add(
 
             tabs.TabPages.Add(
                 huesTab);
+            tabs.TabPages.Add(
+                alignmentTab);
 
             _propertiesPanel.Controls.Add(
                 tabs);
@@ -2934,13 +2893,17 @@ tabs.TabPages.Add(
                         "APLICAR",
 
                     Width =
-                        70,
+                        85,
 
                     Height =
-                        23,
+                        28,
 
                     Dock =
-                        DockStyle.Fill,
+                        DockStyle.None,
+
+                    Anchor =
+                        AnchorStyles.Top |
+                        AnchorStyles.Right,
 
                     FlatStyle =
                         FlatStyle.Standard,
@@ -2967,11 +2930,245 @@ tabs.TabPages.Add(
                 _applyButton,
                 2);
 
-            tab.Controls.Add(
+                        var propertiesContainer =
+                new Panel
+                {
+                    Dock =
+                        DockStyle.Fill,
+
+                    Padding =
+                        new Padding(0)
+                };
+
+            var alignmentPanelV98D =
+                new Panel
+                {
+                    Dock =
+                        DockStyle.Bottom,
+
+                    Height =
+                        180,
+
+                    Padding =
+                        new Padding(4),
+
+                    BackColor =
+                        Color.Gainsboro
+                };
+
+            var alignmentTitleV98D =
+                new Label
+                {
+                    Text =
+                        "ALINHAMENTO",
+
+                    Dock =
+                        DockStyle.Top,
+
+                    Height =
+                        20,
+
+                    Font =
+                        new Font(
+                            Font,
+                            FontStyle.Bold),
+
+                    ForeColor =
+                        SystemColors.ControlText,
+
+                    TextAlign =
+                        ContentAlignment.MiddleLeft
+                };
+
+            var alignmentFlowV98D =
+                new FlowLayoutPanel
+                {
+                    Dock =
+                        DockStyle.Fill,
+
+                    AutoScroll =
+                        true,
+
+                    WrapContents =
+                        true,
+
+                    FlowDirection =
+                        FlowDirection.LeftToRight,
+
+                    Padding =
+                        new Padding(
+                            0,
+                            2,
+                            0,
+                            0),
+
+                    BackColor =
+                        Color.Gainsboro
+                };
+
+            Button AlignmentButtonV98D(
+                string text,
+                EventHandler click)
+            {
+                var b =
+                    new Button
+                    {
+                        Text =
+                            text,
+
+                        Width =
+                            110,
+
+                        Height =
+                            28,
+
+                        Margin =
+                            new Padding(2),
+
+                        FlatStyle =
+                            FlatStyle.Standard,
+
+                        Cursor =
+                            Cursors.Hand
+                    };
+
+                b.Click +=
+                    click;
+
+                return b;
+            }
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Esquerda",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.Left);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Centro",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.Center);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Direita",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.Right);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Topo",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.Top);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Meio",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.Middle);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Base",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.Bottom);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Centralizar Horizontal",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.CenterHorizontalGump);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Centralizar Vertical",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.CenterVerticalGump);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Centralizar no Gump",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.CenterGump);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Distribuir Horizontal",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.DistributeHorizontal);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Distribuir Vertical",
+                    delegate
+                    {
+                        AlignSelected(
+                            AlignmentAction.DistributeVertical);
+                    }));
+
+            alignmentFlowV98D.Controls.Add(
+                AlignmentButtonV98D(
+                    "Limpar Seleção",
+                    delegate
+                    {
+                        if (_canvas != null)
+                        {
+                            _canvas.ClearSelection();
+                        }
+                    }));
+
+            alignmentPanelV98D.Controls.Add(
+                alignmentFlowV98D);
+
+            alignmentPanelV98D.Controls.Add(
+                alignmentTitleV98D);
+
+            // IMPORTANTE:
+            // O painel inferior e adicionado primeiro.
+            // O layout principal e adicionado depois.
+            // Assim o DockStyle.Bottom reserva a area inferior
+            // e o DockStyle.Fill ocupa somente o restante.
+
+            propertiesContainer.Controls.Add(
+                alignmentPanelV98D);
+
+            propertiesContainer.Controls.Add(
                 layout);
-        
-        // GUMPEDITOR_ALIGNMENT_IN_PROPERTIES_V95
-        BuildAlignmentTab(tab);
+
+            tab.Controls.Add(
+                propertiesContainer);
+
 }
         private void BuildLinksTab(
             TabPage tab)
@@ -3272,7 +3469,7 @@ tabs.TabPages.Add(
             };
 
             _previewArtButton.Click += PreviewArt;
-            _previewArtButton.Visible = false;
+            _previewArtButton.Visible = true;
 
             _addArtButton = new Button
             {
@@ -3300,8 +3497,8 @@ tabs.TabPages.Add(
             panel.Controls.Add(idLabel);
             panel.Controls.Add(title);
 
-            panel.Dock = DockStyle.Bottom;
-            panel.Height = 155;
+            panel.Dock = DockStyle.Fill;
+            
             tab.Controls.Add(panel);
         }
 
