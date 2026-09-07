@@ -33,8 +33,6 @@ namespace GumpEditor.Parsing
 
             foreach (var element in document.Elements)
             {
-                if (element.Type == GumpElementType.Page)
-                    continue;
 
                 if (string.IsNullOrWhiteSpace(element.SourceCode))
                     continue;
@@ -74,8 +72,6 @@ namespace GumpEditor.Parsing
 
             foreach (var element in document.Elements)
             {
-                if (element.Type == GumpElementType.Page)
-                    continue;
 
                 if (string.IsNullOrWhiteSpace(
                         element.SourceCode))
@@ -145,7 +141,12 @@ namespace GumpEditor.Parsing
         {
             switch (element.Type)
             {
-                case GumpElementType.Background:
+                case GumpElementType.Page:
+                    SetInt(
+                        args,
+                        0,
+                        element.Page);
+                    break;                case GumpElementType.Background:
                     SetInt(args, 0, element.X);
                     SetInt(args, 1, element.Y);
                     SetInt(args, 2, Math.Max(1, element.Width));
@@ -213,12 +214,32 @@ namespace GumpEditor.Parsing
                      * 5 = GumpButtonType
                      * 6 = param
                      *
-                     * Preservamos 3, 5 e 6.
+                     * O pressedID original é preservado.
+                     * A ação e o destino são editáveis no programa.
                      */
                     SetInt(args, 0, element.X);
                     SetInt(args, 1, element.Y);
                     SetInt(args, 2, element.ArtId);
                     SetInt(args, 4, element.ButtonId);
+
+                    while (args.Count <= 6)
+                        args.Add("0");
+
+                    if (element.Parameters.Count > 3)
+                        args[3] = element.Parameters[3];
+
+                    if (element.Parameters.Count > 5)
+                        args[5] = element.Parameters[5];
+
+                    if (element.Parameters.Count > 6)
+                        args[6] = element.Parameters[6];
+
+                    break;
+
+                    SetInt(
+                        args,
+                        0,
+                        element.Page);
                     break;
 
                 case GumpElementType.Checkbox:
@@ -328,14 +349,58 @@ namespace GumpEditor.Parsing
                         element.ArtId);
 
                 case GumpElementType.Button:
-                    return string.Format(
-                        "AddButton({0}, {1}, {2}, {3}, {4}, GumpButtonType.Reply, 0);",
-                        element.X,
-                        element.Y,
-                        element.ArtId,
-                        element.ArtId,
-                        element.ButtonId);
+                    {
+                        string buttonType =
+                            "GumpButtonType.Reply";
 
+                        string buttonParam =
+                            "0";
+
+                        string pressedId =
+                            element.ArtId.ToString();
+
+                        if (element.Parameters != null)
+                        {
+                            if (element.Parameters.Count > 3 &&
+                                !string.IsNullOrWhiteSpace(
+                                    element.Parameters[3]))
+                            {
+                                pressedId =
+                                    element.Parameters[3];
+                            }
+
+                            if (element.Parameters.Count > 5 &&
+                                !string.IsNullOrWhiteSpace(
+                                    element.Parameters[5]))
+                            {
+                                buttonType =
+                                    element.Parameters[5];
+                            }
+
+                            if (element.Parameters.Count > 6 &&
+                                !string.IsNullOrWhiteSpace(
+                                    element.Parameters[6]))
+                            {
+                                buttonParam =
+                                    element.Parameters[6];
+                            }
+                        }
+
+                        return string.Format(
+                            "AddButton({0}, {1}, {2}, {3}, {4}, {5}, {6});",
+                            element.X,
+                            element.Y,
+                            element.ArtId,
+                            pressedId,
+                            element.ButtonId,
+                            buttonType,
+                            buttonParam);
+                    }
+
+                case GumpElementType.Page:
+                    return string.Format(
+                        "AddPage({0});",
+                        element.Page);
                 case GumpElementType.Label:
                     return string.Format(
                         "AddLabel({0}, {1}, {2}, \"{3}\");",
