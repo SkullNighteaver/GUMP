@@ -5723,7 +5723,6 @@ private void LoadSelectedElementIntoTextEditor()
     LoadSelectedElementIntoTextEditor();
 }
 
-    }
 private void BuildGumpHtmlEditor()
 {
     _gumpHtmlGroup = new GroupBox
@@ -6035,3 +6034,4 @@ private void BuildGumpZOrderControls()
 
 
 
+}
