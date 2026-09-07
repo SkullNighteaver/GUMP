@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Text;
 using GumpEditor.Models;
@@ -6,13 +6,13 @@ using GumpEditor.Models;
 namespace GumpEditor.Parsing
 {
     /// <summary>
-    /// Exporta o Gump novamente para código C#.
+    /// Exporta o Gump novamente para cÃ³digo C#.
     ///
-    /// A regra principal é:
-    /// - preservar todos os parâmetros originais;
+    /// A regra principal Ã©:
+    /// - preservar todos os parÃ¢metros originais;
     /// - alterar somente os valores que o editor modificou;
-    /// - não destruir parâmetros que o editor ainda não possui
-    /// como propriedade específica.
+    /// - nÃ£o destruir parÃ¢metros que o editor ainda nÃ£o possui
+    /// como propriedade especÃ­fica.
     /// </summary>
     public static class GumpCodeExporter
     {
@@ -24,10 +24,10 @@ namespace GumpEditor.Parsing
             string source = document.SourceCode ?? string.Empty;
 
             if (string.IsNullOrWhiteSpace(source))
-                throw new InvalidOperationException("O documento não possui código-fonte.");
+                throw new InvalidOperationException("O documento nÃ£o possui cÃ³digo-fonte.");
 
-            // Cada elemento é associado à sua ocorrência sequencial no código original.
-            // Isso evita trocar a primeira ocorrência sempre que existirem comandos iguais.
+            // Cada elemento Ã© associado Ã  sua ocorrÃªncia sequencial no cÃ³digo original.
+            // Isso evita trocar a primeira ocorrÃªncia sempre que existirem comandos iguais.
             var replacements = new List<Tuple<int, int, string>>();
             var occurrenceBySource = new Dictionary<string, int>(StringComparer.Ordinal);
 
@@ -213,11 +213,11 @@ namespace GumpEditor.Parsing
                 return null;
 
             /*
-             * Se o elemento veio do código original,
-             * usamos TODOS os parâmetros encontrados
+             * Se o elemento veio do cÃ³digo original,
+             * usamos TODOS os parÃ¢metros encontrados
              * pelo parser.
              *
-             * Isso impede que parâmetros desconhecidos
+             * Isso impede que parÃ¢metros desconhecidos
              * sejam perdidos durante o Save.
              */
             if (element.Parameters.Count > 0 &&
@@ -242,10 +242,10 @@ namespace GumpEditor.Parsing
             }
 
             /*
-             * Elementos novos ainda não possuem
-             * parâmetros originais.
+             * Elementos novos ainda nÃ£o possuem
+             * parÃ¢metros originais.
              *
-             * Neste caso geramos um comando padrão.
+             * Neste caso geramos um comando padrÃ£o.
              */
             return GenerateNewElement(element);
         }
@@ -329,8 +329,8 @@ namespace GumpEditor.Parsing
                      * 5 = GumpButtonType
                      * 6 = param
                      *
-                     * O pressedID original é preservado.
-                     * A ação e o destino são editáveis no programa.
+                     * O pressedID original Ã© preservado.
+                     * A aÃ§Ã£o e o destino sÃ£o editÃ¡veis no programa.
                      */
                     SetInt(args, 0, element.X);
                     SetInt(args, 1, element.Y);
@@ -351,17 +351,13 @@ namespace GumpEditor.Parsing
 
                     break;
 
-                    SetInt(
-                        args,
-                        0,
-                        element.Page);
                     break;
 
                 case GumpElementType.Checkbox:
                 case GumpElementType.Radio:
                     /*
-                     * Preservamos todos os parâmetros
-                     * que não são editados pelo modelo.
+                     * Preservamos todos os parÃ¢metros
+                     * que nÃ£o sÃ£o editados pelo modelo.
                      */
                     SetInt(args, 0, element.X);
                     SetInt(args, 1, element.Y);
@@ -402,7 +398,7 @@ namespace GumpEditor.Parsing
                 case GumpElementType.Tooltip:
                     /*
                      * Esses comandos normalmente possuem
-                     * somente informações sem posição.
+                     * somente informaÃ§Ãµes sem posiÃ§Ã£o.
                      *
                      * Mantemos os argumentos originais.
                      */
