@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -2169,6 +2169,423 @@ private void InitializeMenu()
                 _canvas.SelectElement(
                     element);
             }
+        }
+
+        // ============================================================
+        // ATALHOS DO EDITOR
+        // ============================================================
+
+        protected override bool ProcessCmdKey(
+            ref Message msg,
+            Keys keyData)
+        {
+            /*
+             * Não interceptar os atalhos normais quando o usuário
+             * estiver digitando em um campo de texto.
+             */
+            Control focused =
+                FindFocusedControl(this);
+
+            bool textControl =
+                focused is TextBoxBase ||
+                focused is ComboBox;
+
+            if (textControl)
+            {
+                return base.ProcessCmdKey(
+                    ref msg,
+                    keyData);
+            }
+
+            if (keyData == (Keys.Control | Keys.C))
+            {
+                if (_canvas != null &&
+                    _canvas.CopySelectedElement())
+                {
+                    UpdateStatus();
+                    return true;
+                }
+            }
+
+            if (keyData == (Keys.Control | Keys.X))
+            {
+                if (_canvas != null &&
+                    _canvas.CutSelectedElement())
+                {
+                    PopulateElements();
+                    UpdateProperties();
+                    UpdateStatus();
+                    return true;
+                }
+            }
+
+            if (keyData == (Keys.Control | Keys.V))
+            {
+                if (_canvas != null &&
+                    _canvas.PasteElement())
+                {
+                    PopulateElements();
+                    UpdateProperties();
+                    UpdateStatus();
+                    return true;
+                }
+            }
+
+            if (keyData == Keys.Delete)
+            {
+                DeleteElement(
+                    null,
+                    EventArgs.Empty);
+
+                return true;
+            }
+
+            /*
+             * F7 abre o diagnóstico do Gump.
+             */
+            if (keyData == Keys.F7)
+            {
+                ShowGumpDiagnostics();
+                return true;
+            }
+
+            return base.ProcessCmdKey(
+                ref msg,
+                keyData);
+        }
+
+        private static Control FindFocusedControl(
+            Control root)
+        {
+            if (root == null)
+                return null;
+
+            Control current = root;
+
+            while (current is ContainerControl)
+            {
+                ContainerControl container =
+                    current as ContainerControl;
+
+                Control child =
+                    container.ActiveControl;
+
+                if (child == null)
+                    break;
+
+                current = child;
+            }
+
+            return current;
+        }
+
+        // ============================================================
+        // DIAGNÓSTICO DO GUMP
+        // ============================================================
+
+        private void ShowGumpDiagnostics()
+        {
+            if (_canvas == null ||
+                _canvas.Document == null)
+            {
+                MessageBox.Show(
+                    this,
+                    "Nenhum Gump está aberto.",
+                    "Diagnóstico do Gump",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+
+                return;
+            }
+
+            var document =
+                _canvas.Document;
+
+            int labels = 0;
+            int html = 0;
+            int images = 0;
+            int buttons = 0;
+            int invalidFonts = 0;
+            int invalidHues = 0;
+            int missingArts = 0;
+            int invalidPositions = 0;
+            int emptyTexts = 0;
+
+            var errors =
+                new List<string>();
+
+            foreach (GumpElement element
+                     in document.Elements)
+            {
+                if (element == null)
+                    continue;
+
+                if (element.Type ==
+                        GumpElementType.Label ||
+                    element.Type ==
+                        GumpElementType.LabelCropped)
+                {
+                    labels++;
+                }
+
+                if (element.Type ==
+                        GumpElementType.Html ||
+                    element.Type ==
+                        GumpElementType.HtmlLocalized ||
+                    element.Type ==
+                        GumpElementType.TextEntry)
+                {
+                    html++;
+                }
+
+                if (element.Type ==
+                        GumpElementType.Image ||
+                    element.Type ==
+                        GumpElementType.ImageTiled)
+                {
+                    images++;
+                }
+
+                if (element.Type ==
+                        GumpElementType.Button ||
+                    element.Type ==
+                        GumpElementType.Checkbox ||
+                    element.Type ==
+                        GumpElementType.Radio ||
+                    element.Type ==
+                        GumpElementType.ImageTiledButton)
+                {
+                    buttons++;
+                }
+
+                if (element.Type ==
+                        GumpElementType.Label ||
+                    element.Type ==
+                        GumpElementType.LabelCropped ||
+                    element.Type ==
+                        GumpElementType.Html ||
+                    element.Type ==
+                        GumpElementType.HtmlLocalized ||
+                    element.Type ==
+                        GumpElementType.TextEntry)
+                {
+                    int font =
+                        element.Font;
+
+                    if (_uoFontReader == null ||
+                        font < 0 ||
+                        font >= _uoFontReader.Fonts.Count)
+                    {
+                        invalidFonts++;
+
+                        errors.Add(
+                            "Fonte inválida: " +
+                            element.Type +
+                            " | Font=" +
+                            font +
+                            " | Linha=" +
+                            element.SourceLine);
+                    }
+                }
+
+                if (element.Hue < 0)
+                {
+                    invalidHues++;
+
+                    errors.Add(
+                        "Hue negativo | Linha=" +
+                        element.SourceLine);
+                }
+                else if (element.Hue > 0 &&
+                         _hueReader != null &&
+                         _hueReader.GetHue(element.Hue) == null)
+                {
+                    invalidHues++;
+
+                    errors.Add(
+                        "Hue não encontrado: " +
+                        element.Hue +
+                        " | Linha=" +
+                        element.SourceLine);
+                }
+
+                if (element.Type ==
+                        GumpElementType.Image ||
+                    element.Type ==
+                        GumpElementType.Button ||
+                    element.Type ==
+                        GumpElementType.Checkbox ||
+                    element.Type ==
+                        GumpElementType.Radio ||
+                    element.Type ==
+                        GumpElementType.ImageTiledButton)
+                {
+                    if (element.ArtId <= 0)
+                    {
+                        missingArts++;
+
+                        errors.Add(
+                            "ArtId inválido: " +
+                            element.ArtId +
+                            " | " +
+                            element.Type +
+                            " | Linha=" +
+                            element.SourceLine);
+                    }
+                    else if (_gumpArtReader != null &&
+                             _gumpArtReader.GetGump(
+                                 element.ArtId) == null)
+                    {
+                        missingArts++;
+
+                        errors.Add(
+                            "Art não encontrado: " +
+                            element.ArtId +
+                            " | " +
+                            element.Type +
+                            " | Linha=" +
+                            element.SourceLine);
+                    }
+                }
+
+                if (element.X < -10000 ||
+                    element.Y < -10000 ||
+                    element.X > 10000 ||
+                    element.Y > 10000)
+                {
+                    invalidPositions++;
+
+                    errors.Add(
+                        "Posição suspeita: (" +
+                        element.X +
+                        "," +
+                        element.Y +
+                        ") | Linha=" +
+                        element.SourceLine);
+                }
+
+                if ((element.Type ==
+                        GumpElementType.Label ||
+                     element.Type ==
+                        GumpElementType.LabelCropped ||
+                     element.Type ==
+                        GumpElementType.Html ||
+                     element.Type ==
+                        GumpElementType.TextEntry) &&
+                    string.IsNullOrWhiteSpace(element.Text))
+                {
+                    emptyTexts++;
+
+                    errors.Add(
+                        "Elemento de texto vazio: " +
+                        element.Type +
+                        " | Linha=" +
+                        element.SourceLine);
+                }
+            }
+
+            string status =
+                errors.Count == 0
+                    ? "✓ NENHUM PROBLEMA ENCONTRADO"
+                    : "⚠ FORAM ENCONTRADOS " +
+                      errors.Count +
+                      " PROBLEMA(S)";
+
+            var text =
+                "DIAGNÓSTICO DO GUMP\r\n" +
+                "====================\r\n\r\n" +
+
+                "Documento: " +
+                document.Name +
+                "\r\n" +
+
+                "Tamanho: " +
+                document.Width +
+                " x " +
+                document.Height +
+                "\r\n\r\n" +
+
+                "Elementos: " +
+                document.Elements.Count +
+                "\r\n" +
+
+                "Labels: " +
+                labels +
+                "\r\n" +
+
+                "HTML/TextEntry: " +
+                html +
+                "\r\n" +
+
+                "Imagens: " +
+                images +
+                "\r\n" +
+
+                "Botões: " +
+                buttons +
+                "\r\n\r\n" +
+
+                "Fontes inválidas: " +
+                invalidFonts +
+                "\r\n" +
+
+                "Hues inválidos: " +
+                invalidHues +
+                "\r\n" +
+
+                "Artes ausentes: " +
+                missingArts +
+                "\r\n" +
+
+                "Posições suspeitas: " +
+                invalidPositions +
+                "\r\n" +
+
+                "Textos vazios: " +
+                emptyTexts +
+                "\r\n\r\n" +
+
+                status;
+
+            if (errors.Count > 0)
+            {
+                text +=
+                    "\r\n\r\n--------------------\r\n" +
+                    "DETALHES:\r\n\r\n";
+
+                int max =
+                    Math.Min(
+                        errors.Count,
+                        25);
+
+                for (int i = 0;
+                     i < max;
+                     i++)
+                {
+                    text +=
+                        (i + 1) +
+                        ". " +
+                        errors[i] +
+                        "\r\n";
+                }
+
+                if (errors.Count > max)
+                {
+                    text +=
+                        "\r\n... e mais " +
+                        (errors.Count - max) +
+                        " problema(s).";
+                }
+            }
+
+            MessageBox.Show(
+                this,
+                text,
+                "Diagnóstico do Gump",
+                MessageBoxButtons.OK,
+                errors.Count == 0
+                    ? MessageBoxIcon.Information
+                    : MessageBoxIcon.Warning);
         }
 
         private void DeleteElement(
