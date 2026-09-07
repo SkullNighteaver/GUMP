@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -54,14 +54,7 @@ private Label _textFontInfo;
         private GroupBox _gumpHtmlGroup;
         private RichTextBox _gumpHtmlEditor;
         private Button _gumpHtmlApplyButton;
-
-        private Panel _gumpZOrderPanel;
-        private Button _gumpZBackButton;
-        private Button _gumpZBackwardButton;
-        private Button _gumpZForwardButton;
-        private Button _gumpZFrontButton;
-
-        private Label _gumpFontInfo;
+private Label _gumpFontInfo;
         private MenuStrip _menuStrip;
         private ToolStrip _toolStrip;
         private StatusStrip _statusStrip;
@@ -99,6 +92,19 @@ private Label _textFontInfo;
 
         private Panel _leftPanel;
         private Panel _propertiesPanel;
+        private TabControl _propertiesTabs;
+        private TabPage _gumpHtmlTab;
+
+        private TabPage _gumpZOrderTab;
+        private ListBox _gumpZOrderList;
+        private NumericUpDown _gumpZOrderPosition;
+        private Button _gumpZOrderApplyButton;
+        private Button _gumpZOrderBackButton;
+        private Button _gumpZOrderBackwardButton;
+        private Button _gumpZOrderForwardButton;
+        private Button _gumpZOrderFrontButton;
+        private Label _gumpZOrderInfo;
+        private bool _updatingZOrderList;
 
         private ListBox _elementsList;
         private ComboBox _pageCombo;
@@ -262,7 +268,8 @@ _uoFontReader =
             InitializeTextEditor();
             BuildVisualTextEditor();
             BuildGumpHtmlEditor();
-            BuildGumpZOrderControls();
+            BuildGumpZOrderControls();
+            ConfigureHtmlEditorTab();
 _canvas.SelectedElementChanged += CanvasTextEditorSelectionChanged;
             _canvas.SelectedElementChanged += delegate
 {
@@ -294,6 +301,62 @@ _canvas.SelectedElementChanged += CanvasTextEditorSelectionChanged;
         }
 
         }
+    private void ConfigureHtmlEditorTab()
+    {
+        // GUMPEDITOR_HTML_TAB_LAYOUT_V95
+
+        if (_gumpHtmlTab == null)
+            return;
+
+        var htmlContainer = new Panel
+        {
+            Dock = DockStyle.Fill,
+            AutoScroll = true,
+            Padding = new Padding(4)
+        };
+
+        _gumpHtmlTab.Controls.Clear();
+
+        _gumpHtmlTab.Controls.Add(
+            htmlContainer);
+
+        if (_gumpHtmlGroup != null)
+        {
+            _gumpHtmlGroup.Dock =
+                DockStyle.Top;
+
+            _gumpHtmlGroup.Height =
+                210;
+
+            htmlContainer.Controls.Add(
+                _gumpHtmlGroup);
+        }
+
+        if (_gumpTextEditorPanel != null)
+        {
+            _gumpTextEditorPanel.Dock =
+                DockStyle.Top;
+
+            _gumpTextEditorPanel.Height =
+                250;
+
+            htmlContainer.Controls.Add(
+                _gumpTextEditorPanel);
+        }
+
+        if (_textEditorGroup != null)
+        {
+            _textEditorGroup.Dock =
+                DockStyle.Top;
+
+            _textEditorGroup.Height =
+                430;
+
+            htmlContainer.Controls.Add(
+                _textEditorGroup);
+        }
+    }
+
         private void InitializeTextEditor()
 {
     if (_propertiesPanel == null)
@@ -2224,6 +2287,8 @@ private void InitializeMenu()
                 Dock = DockStyle.Fill
             };
 
+            _propertiesTabs = tabs;
+
             var propertiesTab =
                 new TabPage("Propriedades");
 
@@ -2262,19 +2327,7 @@ private void InitializeMenu()
 
             BuildHuesTab(
                 huesTab);
-            var alignmentTab =
-                new TabPage("Alinhamento");
-
-            alignmentTab.BackColor =
-                lightBack;
-
-            BuildAlignmentTab(
-                alignmentTab);
-
-            tabs.TabPages.Add(
-                alignmentTab);
-
-            tabs.TabPages.Add(
+tabs.TabPages.Add(
                 propertiesTab);
 
             tabs.TabPages.Add(
@@ -2345,6 +2398,8 @@ private void InitializeMenu()
 
             panel.Controls.Add(flow);
             panel.Controls.Add(info);
+            panel.Dock = DockStyle.Bottom;
+            panel.Height = 155;
             tab.Controls.Add(panel);
         }
 
@@ -2914,7 +2969,10 @@ private void InitializeMenu()
 
             tab.Controls.Add(
                 layout);
-        }
+        
+        // GUMPEDITOR_ALIGNMENT_IN_PROPERTIES_V95
+        BuildAlignmentTab(tab);
+}
         private void BuildLinksTab(
             TabPage tab)
         {
@@ -3158,8 +3216,9 @@ private void InitializeMenu()
                 applyLinkButton,
                 2);
 
-            tab.Controls.Add(
-                panel);
+            panel.Dock = DockStyle.Bottom;
+            panel.Height = 155;
+            tab.Controls.Add(panel);
         }
 
         private void BuildArtTab(TabPage tab)
@@ -3241,6 +3300,8 @@ private void InitializeMenu()
             panel.Controls.Add(idLabel);
             panel.Controls.Add(title);
 
+            panel.Dock = DockStyle.Bottom;
+            panel.Height = 155;
             tab.Controls.Add(panel);
         }
 
@@ -3295,6 +3356,8 @@ private void InitializeMenu()
             panel.Controls.Add(_huePreview);
             panel.Controls.Add(title);
 
+            panel.Dock = DockStyle.Bottom;
+            panel.Height = 155;
             tab.Controls.Add(panel);
         }
 
@@ -3469,7 +3532,8 @@ private void InitializeMenu()
             {
                 _updatingElementsList = false;
             }
-        }
+        
+            RefreshGumpZOrderList();}
 
         private void ElementListSelected(
             object sender,
@@ -4407,16 +4471,36 @@ private void InitializeMenu()
 
             UpdateStatus();
         }
+    private void CanvasSelectedElementChanged(
+        object sender,
+        EventArgs e)
+    {
+        UpdateProperties();
 
-        private void CanvasSelectedElementChanged(
-            object sender,
-            EventArgs e)
+        SelectElementInList(
+            _canvas.SelectedElement);
+
+        SelectElementInZOrderList(
+            _canvas.SelectedElement);
+
+        UpdateStatus();
+
+        // GUMPEDITOR_ART_REFRESH_V95
+
+        if (_canvas != null)
         {
-            UpdateProperties();
-            SelectElementInList(
-                _canvas.SelectedElement);
-            UpdateStatus();
+            try
+            {
+                _canvas.ClearArtCache();
+            }
+            catch
+            {
+            }
+
+            _canvas.Invalidate();
+            _canvas.RefreshCanvas();
         }
+    }
 
         private void UpdateProperties()
         {
@@ -5168,10 +5252,7 @@ if (_uoFontReader != null &&
 
     if (_propertiesPanel != null)
     {
-        _propertiesPanel.Controls.Add(
-            _gumpTextEditorPanel);
-
-        _gumpTextEditorPanel.BringToFront();
+_gumpTextEditorPanel.BringToFront();
     }
 }
         private void GumpFontComboDrawItem(
@@ -5350,20 +5431,62 @@ private void LoadSelectedElementIntoTextEditor()
         ||
         isHtml;
 
-    if (isHtml)
+        if (isHtml)
     {
-        _gumpTextEditorPanel.Visible = false;
+                // GUMPEDITOR_HTML_VISIBILITY_V95
+
+                if (_propertiesTabs != null &&
+                    _gumpHtmlTab != null)
+                {
+                    _propertiesTabs.SelectedTab =
+                        _gumpHtmlTab;
+                }
+
+                if (_textEditorGroup != null)
+                    _textEditorGroup.Visible = true;
+
+                if (_gumpTextEditorPanel != null)
+                    _gumpTextEditorPanel.Visible = true;
+
+                if (_gumpHtmlGroup != null)
+                    _gumpHtmlGroup.Visible = true;
+
+        _gumpTextEditorPanel.Visible =
+            false;
 
         if (_gumpHtmlGroup != null)
-            _gumpHtmlGroup.Visible = true;
-    }
-    else
-    {
-        _gumpTextEditorPanel.Visible = isText;
+            _gumpHtmlGroup.Visible =
+                true;
 
-        if (_gumpHtmlGroup != null)
-            _gumpHtmlGroup.Visible = false;
+        if (_propertiesTabs != null &&
+            _gumpHtmlTab != null)
+        {
+            _propertiesTabs.SelectedTab =
+                _gumpHtmlTab;
+        }
+
+        if (_gumpHtmlEditor != null)
+        {
+            string html =
+                element.Text ??
+                string.Empty;
+
+            if (element.Parameters.Count > 4)
+            {
+                html =
+                    element.Parameters[4] ??
+                    html;
+            }
+
+            _gumpHtmlEditor.Text =
+                html;
+        }
+
+        return;
     }
+
+    _gumpTextEditorPanel.Visible =
+        isText;
 
     if (!isText)
         return;
@@ -5722,312 +5845,1075 @@ private void LoadSelectedElementIntoTextEditor()
 
     LoadSelectedElementIntoTextEditor();
 }
-
-private void BuildGumpHtmlEditor()
-{
-    _gumpHtmlGroup = new GroupBox
-    {
-        Text = "EDITOR HTML",
-        Dock = DockStyle.Bottom,
-        Height = 190,
-        Padding = new Padding(6)
-    };
-
-    _gumpHtmlEditor = new RichTextBox
-    {
-        Dock = DockStyle.Fill,
-        Multiline = true,
-        WordWrap = false,
-        ScrollBars = RichTextBoxScrollBars.Both,
-        AcceptsTab = true
-    };
-
-    _gumpHtmlApplyButton = new Button
-    {
-        Text = "APLICAR",
-        Dock = DockStyle.Bottom,
-        Height = 28
-    };
-
-    _gumpHtmlApplyButton.Click += delegate
-    {
-        ApplyGumpHtmlEditor();
-    };
-
-    _gumpHtmlGroup.Controls.Add(
-        _gumpHtmlEditor);
-
-    _gumpHtmlGroup.Controls.Add(
-        _gumpHtmlApplyButton);
-
-    if (_propertiesPanel != null)
-    {
-        _propertiesPanel.Controls.Add(
-            _gumpHtmlGroup);
-
-        _gumpHtmlGroup.BringToFront();
-    }
-
-    _gumpHtmlGroup.Visible = false;
-}
-
-private void ApplyGumpHtmlEditor()
-{
-    if (_canvas == null ||
-        _canvas.SelectedElement == null ||
-        _gumpHtmlEditor == null)
-    {
-        return;
-    }
-
-    GumpElement element =
-        _canvas.SelectedElement;
-
-    string html =
-        _gumpHtmlEditor.Text ??
-        string.Empty;
-
-    SaveUndoSnapshot();
-
-    element.Text =
-        html;
-
-    while (element.Parameters.Count <= 4)
-    {
-        element.Parameters.Add(
-            string.Empty);
-    }
-
-    element.Parameters[4] =
-        html;
-
-    if (_canvas.Document != null)
-    {
-        _canvas.Document.IsModified = true;
-    }
-
-    _canvas.Invalidate();
-
-    LoadSelectedElementIntoTextEditor();
-}
-
-private void MoveSelectedGumpZOrder(
-    int mode)
-{
-    if (_canvas == null ||
-        _canvas.SelectedElement == null ||
-        _canvas.Document == null)
-    {
-        return;
-    }
-
-    GumpElement selected =
-        _canvas.SelectedElement;
-
-    List<GumpElement> elements =
-        _canvas.Document.Elements;
-
-    if (elements == null ||
-        elements.Count == 0)
-    {
-        return;
-    }
-
-    // ========================================================
-    // CRIA UMA LISTA SOMENTE COM OS ELEMENTOS DA MESMA PAGE
-    // ========================================================
-
-    List<int> pageIndexes =
-        new List<int>();
-
-    List<GumpElement> pageElements =
-        new List<GumpElement>();
-
-    for (int i = 0;
-         i < elements.Count;
-         i++)
-    {
-        if (elements[i] == null)
-            continue;
-
-        if (elements[i].Page ==
-            selected.Page)
+        private void BuildGumpHtmlEditor()
         {
-            pageIndexes.Add(i);
-            pageElements.Add(elements[i]);
+            if (_propertiesTabs == null)
+                return;
+
+            if (_gumpHtmlTab != null)
+                return;
+
+            _gumpHtmlTab =
+                new TabPage("HTML");
+
+            _gumpHtmlTab.Padding =
+                new Padding(4);
+
+            _gumpHtmlTab.BackColor =
+                Color.Gainsboro;
+
+            _gumpHtmlGroup =
+                new GroupBox
+                {
+                    Text = "EDITOR HTML",
+                    Dock = DockStyle.Fill,
+                    Padding = new Padding(6)
+                };
+
+            Panel toolbar =
+                new Panel
+                {
+                    Dock = DockStyle.Top,
+                    Height = 86
+                };
+
+            FlowLayoutPanel tools =
+                new FlowLayoutPanel
+                {
+                    Dock = DockStyle.Fill,
+                    AutoScroll = true,
+                    WrapContents = true,
+                    FlowDirection =
+                        FlowDirection.LeftToRight,
+                    Padding = new Padding(2)
+                };
+
+            Func<string, string, string, Button> wrap =
+                delegate(
+                    string caption,
+                    string openTag,
+                    string closeTag)
+                {
+                    Button button =
+                        new Button
+                        {
+                            Text = caption,
+                            Width = 62,
+                            Height = 28,
+                            Margin = new Padding(2)
+                        };
+
+                    button.Click += delegate
+                    {
+                        HtmlWrapSelection(
+                            openTag,
+                            closeTag);
+                    };
+
+                    return button;
+                };
+
+            Func<string, string, Button> insert =
+                delegate(
+                    string caption,
+                    string value)
+                {
+                    Button button =
+                        new Button
+                        {
+                            Text = caption,
+                            Width = 76,
+                            Height = 28,
+                            Margin = new Padding(2)
+                        };
+
+                    button.Click += delegate
+                    {
+                        HtmlInsertText(value);
+                    };
+
+                    return button;
+                };
+
+
+            tools.Controls.Add(
+                wrap(
+                    "B",
+                    "<b>",
+                    "</b>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "I",
+                    "<i>",
+                    "</i>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "STRONG",
+                    "<strong>",
+                    "</strong>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "EM",
+                    "<em>",
+                    "</em>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "CENTER",
+                    "<center>",
+                    "</center>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "LEFT",
+                    "<div align=\"left\">",
+                    "</div>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "RIGHT",
+                    "<div align=\"right\">",
+                    "</div>"));
+
+            tools.Controls.Add(
+                insert(
+                    "<BR>",
+                    "<br>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "<P>",
+                    "<p>",
+                    "</p>"));
+
+            tools.Controls.Add(
+                insert(
+                    "&nbsp;",
+                    "&nbsp;"));
+
+            tools.Controls.Add(
+                insert(
+                    "<HR>",
+                    "<hr>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "FONT 0",
+                    "<font face=\"0\">",
+                    "</font>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "FONT 1",
+                    "<font face=\"1\">",
+                    "</font>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "FONT 3",
+                    "<font face=\"3\">",
+                    "</font>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "SIZE 8",
+                    "<font size=\"8\">",
+                    "</font>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "SIZE 10",
+                    "<font size=\"10\">",
+                    "</font>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "SIZE 12",
+                    "<font size=\"12\">",
+                    "</font>"));
+
+            tools.Controls.Add(
+                wrap(
+                    "FONT 3/10",
+                    "<font face=\"3\" size=\"10\">",
+                    "</font>"));
+
+            tools.Controls.Add(
+                insert(
+                    "LINK",
+                    "<a href=\"\">texto</a>"));
+
+            tools.Controls.Add(
+                insert(
+                    "IMG",
+                    "<img src=\"\">"));
+
+            tools.Controls.Add(
+                insert(
+                    "TABLE",
+                    "<table><tr><td>texto</td></tr></table>"));
+
+            tools.Controls.Add(
+                insert(
+                    "UL",
+                    "<ul><li>item</li></ul>"));
+
+            tools.Controls.Add(
+                insert(
+                    "BR +",
+                    "<br><br>"));
+
+            tools.Controls.Add(
+                insert(
+                    "COMENT.",
+                    "<!-- comentario -->"));
+
+            Button clearButton =
+                new Button
+                {
+                    Text = "LIMPAR TAGS",
+                    Width = 95,
+                    Height = 28,
+                    Margin = new Padding(2)
+                };
+
+            clearButton.Click += delegate
+            {
+                HtmlRemoveFormattingFromSelection();
+            };
+
+            tools.Controls.Add(
+                clearButton);
+
+            _gumpHtmlEditor =
+                new RichTextBox
+                {
+                    Dock = DockStyle.Fill,
+                    Multiline = true,
+                    WordWrap = false,
+                    DetectUrls = false,
+                    AcceptsTab = true,
+                    ScrollBars =
+                        RichTextBoxScrollBars.Both,
+                    Font =
+                        new Font(
+                            "Consolas",
+                            10f,
+                            FontStyle.Regular),
+                    BorderStyle =
+                        BorderStyle.FixedSingle
+                };
+
+            _gumpHtmlApplyButton =
+                new Button
+                {
+                    Text = "APLICAR HTML",
+                    Dock = DockStyle.Bottom,
+                    Height = 32
+                };
+
+            _gumpHtmlApplyButton.Click += delegate
+            {
+                ApplyGumpHtmlEditor();
+            };
+
+            toolbar.Controls.Add(
+                tools);
+
+            _gumpHtmlGroup.Controls.Add(
+                _gumpHtmlEditor);
+
+            _gumpHtmlGroup.Controls.Add(
+                _gumpHtmlApplyButton);
+
+            _gumpHtmlGroup.Controls.Add(
+                toolbar);
+
+            _gumpHtmlTab.Controls.Add(
+                _gumpHtmlGroup);
+
+            _propertiesTabs.TabPages.Add(
+                _gumpHtmlTab);
         }
-    }
+        private void HtmlWrapSelection(
+            string openTag,
+            string closeTag)
+        {
+            if (_gumpHtmlEditor == null)
+                return;
 
-    int current =
-        pageElements.IndexOf(selected);
+            int start =
+                _gumpHtmlEditor.SelectionStart;
 
-    if (current < 0)
-        return;
+            int length =
+                _gumpHtmlEditor.SelectionLength;
 
-    // ========================================================
-    // MODOS
-    //
-    // 0 = TRAS
-    // 1 = RECUAR
-    // 2 = AVANCAR
-    // 3 = FRENTE
-    // ========================================================
+            string selected =
+                length > 0
+                    ? _gumpHtmlEditor.SelectedText
+                    : "texto";
 
-    int target =
-        current;
+            string replacement =
+                openTag +
+                selected +
+                closeTag;
 
-    if (mode == 0)
-    {
-        target = 0;
-    }
-    else if (mode == 1)
-    {
-        target =
-            Math.Max(
-                0,
-                current - 1);
-    }
-    else if (mode == 2)
-    {
-        target =
-            Math.Min(
-                pageElements.Count - 1,
-                current + 1);
-    }
-    else if (mode == 3)
-    {
-        target =
-            pageElements.Count - 1;
-    }
-    else
-    {
-        return;
-    }
+            _gumpHtmlEditor.SelectedText =
+                replacement;
 
-    if (target == current)
-        return;
+            if (length <= 0)
+            {
+                _gumpHtmlEditor.SelectionStart =
+                    start +
+                    openTag.Length;
 
-    SaveUndoSnapshot();
+                _gumpHtmlEditor.SelectionLength =
+                    selected.Length;
+            }
+            else
+            {
+                _gumpHtmlEditor.SelectionStart =
+                    start +
+                    replacement.Length;
+            }
 
-    pageElements.RemoveAt(
-        current);
+            _gumpHtmlEditor.Focus();
+        }
 
-    pageElements.Insert(
-        target,
-        selected);
+        private void HtmlInsertText(
+            string value)
+        {
+            if (_gumpHtmlEditor == null)
+                return;
 
-    // ========================================================
-    // DEVOLVE A ORDEM PARA OS INDICES ORIGINAIS.
-    //
-    // SOMENTE ELEMENTOS DA MESMA PAGE SAO ALTERADOS.
-    // ========================================================
+            int start =
+                _gumpHtmlEditor.SelectionStart;
 
-    for (int i = 0;
-         i < pageIndexes.Count;
-         i++)
-    {
-        elements[pageIndexes[i]] =
-            pageElements[i];
-    }
+            _gumpHtmlEditor.SelectedText =
+                value;
 
-    if (_canvas.Document != null)
-    {
-        _canvas.Document.IsModified = true;
-    }
+            _gumpHtmlEditor.SelectionStart =
+                start +
+                value.Length;
 
-    _canvas.Invalidate();
+            _gumpHtmlEditor.Focus();
+        }
 
-    PopulateElements();
+        private void HtmlRemoveFormattingFromSelection()
+        {
+            if (_gumpHtmlEditor == null)
+                return;
 
-    UpdateProperties();
+            int start =
+                _gumpHtmlEditor.SelectionStart;
 
-    UpdateStatus();
-}
+            int length =
+                _gumpHtmlEditor.SelectionLength;
 
-private void BuildGumpZOrderControls()
-{
-    _gumpZOrderPanel = new Panel
-    {
-        Dock = DockStyle.Bottom,
-        Height = 34
-    };
+            if (length <= 0)
+                return;
 
-    _gumpZBackButton = new Button
-    {
-        Text = "TRAS",
-        Width = 58,
-        Height = 28,
-        Left = 0,
-        Top = 2
-    };
+            string selected =
+                _gumpHtmlEditor.SelectedText;
 
-    _gumpZBackwardButton = new Button
-    {
-        Text = "RECUAR",
-        Width = 68,
-        Height = 28,
-        Left = 60,
-        Top = 2
-    };
+            string plain =
+                System.Text.RegularExpressions.Regex.Replace(
+                    selected,
+                    @"<[^>]+>",
+                    string.Empty);
 
-    _gumpZForwardButton = new Button
-    {
-        Text = "AVANCAR",
-        Width = 68,
-        Height = 28,
-        Left = 130,
-        Top = 2
-    };
+            _gumpHtmlEditor.SelectedText =
+                plain;
 
-    _gumpZFrontButton = new Button
-    {
-        Text = "FRENTE",
-        Width = 62,
-        Height = 28,
-        Left = 200,
-        Top = 2
-    };
+            _gumpHtmlEditor.SelectionStart =
+                start +
+                plain.Length;
 
-    _gumpZBackButton.Click += delegate
-    {
-        MoveSelectedGumpZOrder(0);
-    };
+            _gumpHtmlEditor.Focus();
+        }
+        private void ApplyGumpHtmlEditor()
+        {
+            if (_canvas == null ||
+                _canvas.SelectedElement == null ||
+                _gumpHtmlEditor == null)
+            {
+                return;
+            }
 
-    _gumpZBackwardButton.Click += delegate
-    {
-        MoveSelectedGumpZOrder(1);
-    };
+            GumpElement element =
+                _canvas.SelectedElement;
 
-    _gumpZForwardButton.Click += delegate
-    {
-        MoveSelectedGumpZOrder(2);
-    };
+            if (element.Type !=
+                GumpElementType.Html)
+            {
+                MessageBox.Show(
+                    this,
+                    "Selecione um elemento HTML.",
+                    "Editor HTML",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
 
-    _gumpZFrontButton.Click += delegate
-    {
-        MoveSelectedGumpZOrder(3);
-    };
+                return;
+            }
 
-    _gumpZOrderPanel.Controls.Add(
-        _gumpZBackButton);
+            string html =
+                _gumpHtmlEditor.Text ??
+                string.Empty;
 
-    _gumpZOrderPanel.Controls.Add(
-        _gumpZBackwardButton);
+            SaveUndoSnapshot();
 
-    _gumpZOrderPanel.Controls.Add(
-        _gumpZForwardButton);
+            element.Text =
+                html;
 
-    _gumpZOrderPanel.Controls.Add(
-        _gumpZFrontButton);
+            while (element.Parameters.Count <= 4)
+            {
+                element.Parameters.Add(
+                    string.Empty);
+            }
 
-    if (_propertiesPanel != null)
-    {
-        _propertiesPanel.Controls.Add(
-            _gumpZOrderPanel);
+            element.Parameters[4] =
+                html;
 
-        _gumpZOrderPanel.BringToFront();
-    }
-}
+            if (_canvas.Document != null)
+            {
+                _canvas.Document.IsModified =
+                    true;
+            }
+
+            _canvas.Invalidate();
+
+            PopulateElements();
+            UpdateProperties();
+            UpdateStatus();
+        }
+        private void MoveSelectedGumpZOrder(
+            int mode)
+        {
+            if (_canvas == null ||
+                _canvas.SelectedElement == null ||
+                _canvas.Document == null)
+            {
+                return;
+            }
+
+            GumpElement selected =
+                _canvas.SelectedElement;
+
+            List<GumpElement> pageElements =
+                new List<GumpElement>();
+
+            List<int> indexes =
+                new List<int>();
+
+            List<GumpElement> allElements =
+                _canvas.Document.Elements;
+
+            for (
+                int i = 0;
+                i < allElements.Count;
+                i++)
+            {
+                GumpElement element =
+                    allElements[i];
+
+                if (element != null &&
+                    element.Page ==
+                    selected.Page)
+                {
+                    indexes.Add(i);
+                    pageElements.Add(element);
+                }
+            }
+
+            int current =
+                pageElements.IndexOf(selected);
+
+            if (current < 0)
+                return;
+
+            int target =
+                current;
+
+            if (mode == 0)
+            {
+                target = 0;
+            }
+            else if (mode == 1)
+            {
+                target =
+                    Math.Max(
+                        0,
+                        current - 1);
+            }
+            else if (mode == 2)
+            {
+                target =
+                    Math.Min(
+                        pageElements.Count - 1,
+                        current + 1);
+            }
+            else if (mode == 3)
+            {
+                target =
+                    pageElements.Count - 1;
+            }
+            else
+            {
+                return;
+            }
+
+            MoveSelectedGumpZOrderTo(
+                target + 1);
+        }
+        private void MoveSelectedGumpZOrderTo(
+            int requestedPosition)
+        {
+            if (_canvas == null ||
+                _canvas.SelectedElement == null ||
+                _canvas.Document == null)
+            {
+                return;
+            }
+
+            GumpElement selected =
+                _canvas.SelectedElement;
+
+            List<GumpElement> pageElements =
+                new List<GumpElement>();
+
+            List<int> indexes =
+                new List<int>();
+
+            List<GumpElement> allElements =
+                _canvas.Document.Elements;
+
+            for (
+                int i = 0;
+                i < allElements.Count;
+                i++)
+            {
+                GumpElement element =
+                    allElements[i];
+
+                if (element != null &&
+                    element.Page ==
+                    selected.Page)
+                {
+                    indexes.Add(i);
+                    pageElements.Add(element);
+                }
+            }
+
+            int count =
+                pageElements.Count;
+
+            if (count <= 0)
+                return;
+
+            int current =
+                pageElements.IndexOf(selected);
+
+            if (current < 0)
+                return;
+
+            int target =
+                Math.Max(
+                    1,
+                    Math.Min(
+                        count,
+                        requestedPosition))
+                - 1;
+
+            if (target == current)
+            {
+                RefreshGumpZOrderList();
+
+                SelectElementInZOrderList(
+                    selected);
+
+                return;
+            }
+
+            SaveUndoSnapshot();
+
+            pageElements.RemoveAt(
+                current);
+
+            pageElements.Insert(
+                target,
+                selected);
+
+            for (
+                int i = 0;
+                i < indexes.Count;
+                i++)
+            {
+                allElements[indexes[i]] =
+                    pageElements[i];
+            }
+
+            _canvas.Document.IsModified =
+                true;
+
+            _canvas.Invalidate();
+
+            PopulateElements();
+            UpdateProperties();
+            UpdateStatus();
+
+            RefreshGumpZOrderList();
+
+            SelectElementInZOrderList(
+                selected);
+        }
+
+        private void GumpZOrderListSelected(
+            object sender,
+            EventArgs e)
+        {
+            if (_updatingZOrderList ||
+                _gumpZOrderList == null)
+            {
+                return;
+            }
+
+            GumpElement element =
+                _gumpZOrderList.SelectedItem
+                as GumpElement;
+
+            if (element == null)
+                return;
+
+            if (_gumpZOrderPosition != null &&
+                _gumpZOrderList.SelectedIndex >= 0)
+            {
+                int position =
+                    _gumpZOrderList.SelectedIndex + 1;
+
+                if (
+                    position >=
+                    (int)_gumpZOrderPosition.Minimum &&
+                    position <=
+                    (int)_gumpZOrderPosition.Maximum
+                )
+                {
+                    _gumpZOrderPosition.Value =
+                        position;
+                }
+            }
+
+            // SelectedElement e somente leitura.
+            // Nunca atribuir diretamente.
+            if (_canvas != null)
+            {
+                _canvas.SelectElement(
+                    element);
+            }
+
+            UpdateProperties();
+            UpdateStatus();
+        }
+
+        private void SelectElementInZOrderList(
+            GumpElement element)
+        {
+            if (_gumpZOrderList == null ||
+                element == null)
+            {
+                return;
+            }
+
+            for (
+                int i = 0;
+                i < _gumpZOrderList.Items.Count;
+                i++)
+            {
+                GumpElement item =
+                    _gumpZOrderList.Items[i]
+                    as GumpElement;
+
+                if (ReferenceEquals(
+                    item,
+                    element))
+                {
+                    _updatingZOrderList =
+                        true;
+
+                    try
+                    {
+                        _gumpZOrderList.SelectedIndex =
+                            i;
+
+                        _gumpZOrderList.TopIndex =
+                            Math.Max(
+                                0,
+                                i - 3);
+
+                        if (_gumpZOrderPosition != null)
+                        {
+                            int position =
+                                i + 1;
+
+                            if (
+                                position >=
+                                (int)_gumpZOrderPosition.Minimum &&
+                                position <=
+                                (int)_gumpZOrderPosition.Maximum
+                            )
+                            {
+                                _gumpZOrderPosition.Value =
+                                    position;
+                            }
+                        }
+                    }
+                    finally
+                    {
+                        _updatingZOrderList =
+                            false;
+                    }
+
+                    break;
+                }
+            }
+        }
+
+        private void RefreshGumpZOrderList()
+        {
+            if (_gumpZOrderList == null)
+                return;
+
+            _updatingZOrderList =
+                true;
+
+            try
+            {
+                _gumpZOrderList.Items.Clear();
+
+                if (_canvas == null ||
+                    _canvas.Document == null)
+                {
+                    return;
+                }
+
+                List<GumpElement> elements =
+                    new List<GumpElement>();
+
+                foreach (
+                    GumpElement element
+                    in _canvas.Document.Elements)
+                {
+                    if (element != null &&
+                        element.Page ==
+                        _canvas.Document.CurrentPage)
+                    {
+                        elements.Add(
+                            element);
+                    }
+                }
+
+                foreach (
+                    GumpElement element
+                    in elements)
+                {
+                    _gumpZOrderList.Items.Add(
+                        element);
+                }
+
+                if (_gumpZOrderPosition != null)
+                {
+                    _gumpZOrderPosition.Minimum =
+                        1;
+
+                    _gumpZOrderPosition.Maximum =
+                        Math.Max(
+                            1,
+                            elements.Count);
+                }
+            }
+            finally
+            {
+                _updatingZOrderList =
+                    false;
+            }
+
+            if (_canvas != null)
+            {
+                SelectElementInZOrderList(
+                    _canvas.SelectedElement);
+            }
+        }
+
+        private void DrawGumpZOrderItem(
+            object sender,
+            DrawItemEventArgs e)
+        {
+            if (e.Index < 0 ||
+                _gumpZOrderList == null)
+            {
+                return;
+            }
+
+            e.DrawBackground();
+
+            GumpElement element =
+                _gumpZOrderList.Items[e.Index]
+                as GumpElement;
+
+            if (element == null)
+                return;
+
+            string prefix =
+                (e.Index + 1).ToString("00");
+
+            string label =
+                prefix +
+                "  |  " +
+                element.Type.ToString();
+
+            if (e.Index == 0)
+            {
+                label +=
+                    "  |  ATRAS";
+            }
+            else if (
+                e.Index ==
+                _gumpZOrderList.Items.Count - 1)
+            {
+                label +=
+                    "  |  FRENTE";
+            }
+
+            using (
+                SolidBrush brush =
+                    new SolidBrush(
+                        e.ForeColor))
+            {
+                e.Graphics.DrawString(
+                    label,
+                    e.Font,
+                    brush,
+                    e.Bounds.X + 8,
+                    e.Bounds.Y + 8);
+            }
+
+            e.DrawFocusRectangle();
+        }
+
+        private void ApplyGumpZOrderPosition()
+        {
+            if (_gumpZOrderPosition == null)
+                return;
+
+            MoveSelectedGumpZOrderTo(
+                (int)_gumpZOrderPosition.Value);
+        }
+        private void BuildGumpZOrderControls()
+        {
+            if (_propertiesTabs == null)
+                return;
+
+            if (_gumpZOrderTab != null)
+                return;
+
+            _gumpZOrderTab =
+                new TabPage("Z-ORDER");
+
+            _gumpZOrderTab.BackColor =
+                Color.Gainsboro;
+
+            Panel panel =
+                new Panel
+                {
+                    Dock = DockStyle.Fill,
+                    Padding = new Padding(8)
+                };
+
+            _gumpZOrderInfo =
+                new Label
+                {
+                    Dock = DockStyle.Top,
+                    Height = 48,
+                    Text =
+                        "ORDEM DE CAMADAS\r\n" +
+                        "01 = mais atras | ultimo = mais a frente",
+                    TextAlign =
+                        ContentAlignment.MiddleLeft
+                };
+
+            _gumpZOrderList =
+                new ListBox
+                {
+                    Dock = DockStyle.Fill,
+                    DrawMode =
+                        DrawMode.OwnerDrawFixed,
+                    ItemHeight = 32,
+                    IntegralHeight = false,
+                    BorderStyle =
+                        BorderStyle.FixedSingle
+                };
+
+            _gumpZOrderList.DrawItem +=
+                DrawGumpZOrderItem;
+
+            _gumpZOrderList.SelectedIndexChanged +=
+                GumpZOrderListSelected;
+
+
+            Panel positionPanel =
+                new Panel
+                {
+                    Dock = DockStyle.Bottom,
+                    Height = 72
+                };
+
+
+            Label positionLabel =
+                new Label
+                {
+                    Text = "POSICAO:",
+                    Left = 0,
+                    Top = 7,
+                    Width = 65,
+                    Height = 25
+                };
+
+
+            _gumpZOrderPosition =
+                new NumericUpDown
+                {
+                    Left = 68,
+                    Top = 4,
+                    Width = 65,
+                    Minimum = 1,
+                    Maximum = 1
+                };
+
+
+            _gumpZOrderApplyButton =
+                new Button
+                {
+                    Text = "COLOCAR",
+                    Left = 138,
+                    Top = 3,
+                    Width = 78,
+                    Height = 28
+                };
+
+            _gumpZOrderApplyButton.Click +=
+                delegate
+                {
+                    ApplyGumpZOrderPosition();
+                };
+
+
+            _gumpZOrderBackButton =
+                new Button
+                {
+                    Text = "TRAS",
+                    Left = 0,
+                    Top = 38,
+                    Width = 54,
+                    Height = 28
+                };
+
+            _gumpZOrderBackwardButton =
+                new Button
+                {
+                    Text = "-1",
+                    Left = 58,
+                    Top = 38,
+                    Width = 44,
+                    Height = 28
+                };
+
+            _gumpZOrderForwardButton =
+                new Button
+                {
+                    Text = "+1",
+                    Left = 106,
+                    Top = 38,
+                    Width = 44,
+                    Height = 28
+                };
+
+            _gumpZOrderFrontButton =
+                new Button
+                {
+                    Text = "FRENTE",
+                    Left = 154,
+                    Top = 38,
+                    Width = 65,
+                    Height = 28
+                };
+
+
+            _gumpZOrderBackButton.Click +=
+                delegate
+                {
+                    MoveSelectedGumpZOrder(0);
+                };
+
+            _gumpZOrderBackwardButton.Click +=
+                delegate
+                {
+                    MoveSelectedGumpZOrder(1);
+                };
+
+            _gumpZOrderForwardButton.Click +=
+                delegate
+                {
+                    MoveSelectedGumpZOrder(2);
+                };
+
+            _gumpZOrderFrontButton.Click +=
+                delegate
+                {
+                    MoveSelectedGumpZOrder(3);
+                };
+
+
+            positionPanel.Controls.Add(
+                positionLabel);
+
+            positionPanel.Controls.Add(
+                _gumpZOrderPosition);
+
+            positionPanel.Controls.Add(
+                _gumpZOrderApplyButton);
+
+            positionPanel.Controls.Add(
+                _gumpZOrderBackButton);
+
+            positionPanel.Controls.Add(
+                _gumpZOrderBackwardButton);
+
+            positionPanel.Controls.Add(
+                _gumpZOrderForwardButton);
+
+            positionPanel.Controls.Add(
+                _gumpZOrderFrontButton);
+
+
+            panel.Controls.Add(
+                _gumpZOrderList);
+
+            panel.Controls.Add(
+                positionPanel);
+
+            panel.Controls.Add(
+                _gumpZOrderInfo);
+
+            _gumpZOrderTab.Controls.Add(
+                panel);
+
+            _propertiesTabs.TabPages.Add(
+                _gumpZOrderTab);
+
+            RefreshGumpZOrderList();
+        }
 
 }
 
