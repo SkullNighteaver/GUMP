@@ -43,7 +43,7 @@ namespace GumpEditor.Models
         /// Fonte do fonts.mul.
         /// Valores normalmente utilizados pelo cliente: 0-9.
         /// </summary>
-        public int Font { get; set; } = 0;
+        public int Font { get; set; } = -1;
 
         /// <summary>
         /// Tamanho lógico/auxiliar do texto.
