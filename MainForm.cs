@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
@@ -957,40 +957,75 @@ private void UpdateTextEditorHtmlFont()
     string html =
         _textEditor.Text ?? string.Empty;
 
+    /*
+     * IMPORTANTE:
+     *
+     * Este metodo NAO deve criar automaticamente
+     * uma tag <font>.
+     *
+     * Antes:
+     *
+     *     teste
+     *
+     * virava:
+     *
+     *     <font face="4">teste</font>
+     *
+     * Isso acontecia sempre que o ComboBox de fonte
+     * era alterado.
+     *
+     * Agora:
+     *
+     *     teste
+     *
+     * permanece:
+     *
+     *     teste
+     *
+     * Somente uma tag <font face="N"> que ja exista
+     * sera modificada.
+     */
+
     var pattern =
         @"<font\s+face\s*=\s*[""']?\d+[""']?\s*>";
 
-    if (System.Text.RegularExpressions.Regex.IsMatch(
-        html,
-        pattern,
-        System.Text.RegularExpressions.RegexOptions.IgnoreCase))
+    if (!System.Text.RegularExpressions.Regex.IsMatch(
+            html,
+            pattern,
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase))
     {
-        html =
-            System.Text.RegularExpressions.Regex.Replace(
-                html,
-                pattern,
-                "<font face=\"" +
-                fontId +
-                "\">",
-                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        /*
+         * Nao existe <font face>.
+         *
+         * Nao modificar o HTML do usuario.
+         */
+        return;
     }
-    else
-    {
-        html =
+
+    string newHtml =
+        System.Text.RegularExpressions.Regex.Replace(
+            html,
+            pattern,
             "<font face=\"" +
             fontId +
-            "\">" +
-            html +
-            "</font>";
+            "\">",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    if (string.Equals(
+            html,
+            newHtml,
+            StringComparison.Ordinal))
+    {
+        return;
     }
 
     int caret =
         Math.Min(
             _textEditor.SelectionStart,
-            html.Length);
+            newHtml.Length);
 
     _textEditor.Text =
-        html;
+        newHtml;
 
     _textEditor.SelectionStart =
         caret;

@@ -1,4 +1,4 @@
-﻿using System.Text.RegularExpressions;
+using System.Text.RegularExpressions;
 using System;
 using System.Collections.Generic;
 using System.Drawing;
@@ -22,9 +22,7 @@ namespace GumpEditor.Rendering
 
         private Point _dragStart;
 
-        private int _elementStartX;
 
-        private int _elementStartY;
 
         private double _zoom = 1.0;
 
@@ -1066,7 +1064,7 @@ namespace GumpEditor.Rendering
 
             try
             {
-                int fontId = 0;
+                int fontId = element.Font;
 
                 /*
                  * O cliente UO possui as fontes 0..9.
@@ -2424,6 +2422,7 @@ private Color GetTextColor(
         }
     }
 }
+
 
 
 
