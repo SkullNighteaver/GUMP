@@ -1024,92 +1024,104 @@ namespace GumpEditor.Rendering
         }
 
         private void DrawLabel(
-            Graphics g,
-            GumpElement element)
+    Graphics g,
+    GumpElement element)
+{
+    /*
+     * ============================================================
+     * FONTE REAL DO ULTIMA ONLINE
+     * ============================================================
+     *
+     * Font = -1 significa:
+     *
+     *     PADRAO DO CLIENTE
+     *
+     * No cliente moderno do UO / ClassicUO, quando a fonte
+     * nao e especificada (0xFF), o cliente utiliza Font 1.
+     *
+     * Portanto:
+     *
+     *     element.Font == -1
+     *             |
+     *             v
+     *         Font 1
+     *
+     * Font >= 0 continua sendo uma fonte explicitamente escolhida.
+     * ============================================================
+     */
+
+    Color color =
+        GetTextColor(
+            element.Hue);
+
+    if (UoFontReader == null)
+    {
+        return;
+    }
+
+    try
+    {
+        int fontId =
+            element.Font;
+
+        /*
+         * Font -1 = PADRAO DO CLIENTE.
+         *
+         * ClassicUO moderno resolve 0xFF para Font 1.
+         */
+        if (fontId < 0)
         {
-            /*
-             * ============================================================
-             * FONTE REAL DO ULTIMA ONLINE
-             * ============================================================
-             *
-             * AddLabel possui:
-             *
-             * AddLabel(x, y, hue, text)
-             *
-             * Portanto:
-             *
-             * Parameters[0] = X
-             * Parameters[1] = Y
-             * Parameters[2] = HUE
-             * Parameters[3] = TEXTO
-             *
-             * Parameters[2] NUNCA ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© Font.
-             *
-             * A fonte utilizada pelo editor estÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â¡ em:
-             *
-             * element.Font
-             *
-             * A renderizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â© feita atravÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â©s dos glyphs reais
-             * carregados de fonts.mul.
-             * ============================================================
-             */
+            fontId = 1;
+        }
 
-            Color color =
-                GetTextColor(element.Hue);
+        /*
+         * Protecao caso o arquivo de fontes possua menos fontes.
+         */
+        if (fontId >= UoFontReader.Fonts.Count)
+        {
+            fontId = 1;
 
-            if (UoFontReader == null)
+            if (fontId >= UoFontReader.Fonts.Count)
             {
-                return;
-            }
-
-            try
-            {
-                int fontId = element.Font;
-
-                /*
-                 * O cliente UO possui as fontes 0..9.
-                 */
-                if (fontId < 0 ||
-                    fontId >= UoFontReader.Fonts.Count)
-                {
-                    fontId = 0;
-                }
-
-                string text =
-                    element.Text ?? string.Empty;
-
-                Bitmap bitmap =
-                    UoFontReader.RenderText(
-                        fontId,
-                        text,
-                        color,
-                        1.0f);
-
-                if (bitmap == null)
-                {
-                    return;
-                }
-
-                /*
-                 * O AddLabel trabalha com a origem X/Y
-                 * diretamente no Canvas.
-                 */
-                g.DrawImageUnscaled(
-                    bitmap,
-                    element.X,
-                    element.Y);
-
-                bitmap.Dispose();
-            }
-            catch
-            {
-                /*
-                 * Nunca permitir que um problema de uma fonte
-                 * interrompa a renderizaÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â§ÃƒÆ’Ã†â€™Ãƒâ€šÃ‚Â£o completa do Gump.
-                 */
+                fontId = 0;
             }
         }
-        private void DrawText(
+
+        string text =
+            element.Text ?? string.Empty;
+
+        Bitmap bitmap =
+            UoFontReader.RenderText(
+                fontId,
+                text,
+                color,
+                1.0f);
+
+        if (bitmap == null)
+        {
+            return;
+        }
+
+        /*
+         * AddLabel trabalha diretamente com X/Y.
+         */
+        g.DrawImageUnscaled(
+            bitmap,
+            element.X,
+            element.Y);
+
+        bitmap.Dispose();
+    }
+    catch
+    {
+        /*
+         * Nunca deixar uma falha de fonte interromper
+         * a renderizacao completa do Gump.
+         */
+    }
+}
+
+private void DrawText(
             Graphics g,
             GumpElement element)
         {
@@ -1158,7 +1170,7 @@ namespace GumpEditor.Rendering
             // Fonte padrão para AddHtml.
             // Sem face="N", utiliza Font 0.
 
-            int htmlFontId = 0;
+            int htmlFontId = 1;
 
             Match htmlFaceMatch =
                 Regex.Match(
